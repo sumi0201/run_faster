@@ -1,476 +1,431 @@
+cat > /mnt/user-data/outputs/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="RUN FASTER" />
-  <title>RUN FASTER — Training Log</title>
+  <title>RUN FASTER</title>
   <style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { margin: 0; background: #06060e; }
-    input, select, textarea, button { -webkit-appearance: none; font-family: 'Courier New', monospace; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { background: #06060e; color: #e2e8f0; font-family: 'Courier New', monospace; }
+    input, select, textarea, button { font-family: 'Courier New', monospace; -webkit-appearance: none; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-  <script type="text/babel" data-presets="react">
+  <div id="root"><p style="color:white;padding:20px">読み込み中...</p></div>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js" crossorigin></script>
+
+  <script>
 const { useState, useMemo } = React;
-const { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } = Recharts;
+const { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } = Recharts;
 
 const ZONES = [
-  { label: "Z1", color: "#4ade80", desc: "回復" },
-  { label: "Z2", color: "#a3e635", desc: "有酸素基礎" },
-  { label: "Z3", color: "#facc15", desc: "閾値" },
-  { label: "Z4", color: "#fb923c", desc: "VO2max" },
-  { label: "Z5", color: "#f87171", desc: "無酸素" },
-  { label: "Z6", color: "#e879f9", desc: "最大" },
+  { label:"Z1", color:"#4ade80", desc:"回復" },
+  { label:"Z2", color:"#a3e635", desc:"有酸素基礎" },
+  { label:"Z3", color:"#facc15", desc:"閾値" },
+  { label:"Z4", color:"#fb923c", desc:"VO2max" },
+  { label:"Z5", color:"#f87171", desc:"無酸素" },
+  { label:"Z6", color:"#e879f9", desc:"最大" },
 ];
-const SESSION_TYPES = ["回復ジョグ", "閾値", "インターバル", "ロング走", "レース", "プレハブ", "その他"];
-const CONDITION_LABELS = ["最悪", "悪い", "普通", "良い", "最高"];
-const emptyRep = () => ({ pace: "", hrPeak: "", hrAvg: "", hrRest: "", lactate: "", note: "" });
+const TYPES = ["回復ジョグ","閾値","インターバル","ロング走","レース","プレハブ","その他"];
+const COND = ["最悪","悪い","普通","良い","最高"];
+const STORAGE_KEY = "runfaster_v2";
 
-const STORAGE_KEY = "runfaster_sessions_v1";
+const zc = z => (ZONES.find(x=>x.label===z)||{color:"#94a3b8"}).color;
+const p2n = p => { if(!p)return null; const[m,s]=p.split(":").map(Number); return isNaN(m)?null:m+(s||0)/60; };
+const n2p = n => { if(!n)return"—"; const m=Math.floor(n),s=Math.round((n-m)*60); return m+":"+(s<10?"0":"")+s; };
+const fp  = (d,t) => (!d||!t)?"—":n2p(t/d);
+const wk  = ds => { const d=new Date(ds),dy=d.getDay(),diff=d.getDate()-dy+(dy===0?-6:1),mo=new Date(d.setDate(diff)); return (mo.getMonth()+1)+"/"+(mo.getDate())+"週"; };
+const er  = () => ({pace:"",hrPeak:"",hrAvg:"",hrRest:"",lactate:"",note:""});
+const IS  = { width:"100%", padding:"8px 10px", background:"#0a0a14", border:"1px solid #1e293b", color:"#e2e8f0", fontSize:13, borderRadius:3, outline:"none", boxSizing:"border-box" };
 
-function loadSessions() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-  } catch(e) {}
-  return [
-    {
-      id: 1, date: "2026-05-20", type: "インターバル", distance: 14, duration: 62,
-      hrAvgSession: 168, condition: 3, zone: "Z4", note: "脚が軽い。ラスト2本はペースアップ",
-      intervalSets: [{ setLabel: "8×1000m", reps: [
-        { pace: "3:04", hrPeak: 178, hrAvg: 172, hrRest: 128, lactate: 3.9, note: "" },
-        { pace: "3:05", hrPeak: 180, hrAvg: 174, hrRest: 125, lactate: "", note: "" },
-        { pace: "3:05", hrPeak: 181, hrAvg: 175, hrRest: 122, lactate: 4.2, note: "" },
-        { pace: "3:06", hrPeak: 182, hrAvg: 176, hrRest: 120, lactate: "", note: "" },
-        { pace: "3:05", hrPeak: 183, hrAvg: 177, hrRest: 118, lactate: 4.5, note: "" },
-        { pace: "3:04", hrPeak: 184, hrAvg: 178, hrRest: 116, lactate: "", note: "" },
-        { pace: "3:03", hrPeak: 185, hrAvg: 179, hrRest: 115, lactate: 4.8, note: "ペースアップ" },
-        { pace: "3:01", hrPeak: 187, hrAvg: 181, hrRest: 114, lactate: 5.2, note: "ラスト全力" },
-      ]}],
-      lactateMeasurements: [{ timing: "WU後", value: 1.2 }, { timing: "3本目後", value: 4.2 }, { timing: "5本目後", value: 4.5 }, { timing: "クールダウン後", value: 2.1 }],
-    },
-    { id: 2, date: "2026-05-21", type: "回復ジョグ", distance: 10, duration: 58, hrAvgSession: 132, condition: 3, zone: "Z1", note: "朝。筋肉痛あり", intervalSets: [], lactateMeasurements: [] },
-    {
-      id: 3, date: "2026-05-22", type: "閾値", distance: 16, duration: 70,
-      hrAvgSession: 158, condition: 4, zone: "Z3", note: "安定して走れた",
-      intervalSets: [{ setLabel: "5×2000m", reps: [
-        { pace: "3:19", hrPeak: 162, hrAvg: 158, hrRest: 130, lactate: 3.5, note: "" },
-        { pace: "3:18", hrPeak: 163, hrAvg: 159, hrRest: 128, lactate: "", note: "" },
-        { pace: "3:18", hrPeak: 163, hrAvg: 159, hrRest: 126, lactate: 3.8, note: "" },
-        { pace: "3:17", hrPeak: 164, hrAvg: 160, hrRest: 125, lactate: "", note: "" },
-        { pace: "3:17", hrPeak: 165, hrAvg: 161, hrRest: 124, lactate: 4.0, note: "ラスト少し上げ" },
-      ]}],
-      lactateMeasurements: [{ timing: "WU後", value: 1.1 }, { timing: "3本目後", value: 3.8 }, { timing: "終了後", value: 4.0 }],
-    },
-    { id: 4, date: "2026-05-23", type: "ロング走", distance: 24, duration: 115, hrAvgSession: 140, condition: 3, zone: "Z2", note: "ペース安定。後半少し上げた", intervalSets: [], lactateMeasurements: [{ timing: "60分後", value: 1.8 }] },
-    {
-      id: 5, date: "2026-05-28", type: "インターバル", distance: 16, duration: 68,
-      hrAvgSession: 170, condition: 5, zone: "Z4", note: "過去最高の感覚",
-      intervalSets: [{ setLabel: "10×1000m", reps: [
-        { pace: "3:03", hrPeak: 176, hrAvg: 170, hrRest: 124, lactate: 3.8, note: "" },
-        { pace: "3:03", hrPeak: 177, hrAvg: 171, hrRest: 122, lactate: "", note: "" },
-        { pace: "3:02", hrPeak: 178, hrAvg: 172, hrRest: 120, lactate: 4.1, note: "" },
-        { pace: "3:02", hrPeak: 179, hrAvg: 173, hrRest: 119, lactate: "", note: "" },
-        { pace: "3:02", hrPeak: 179, hrAvg: 173, hrRest: 118, lactate: 4.2, note: "" },
-        { pace: "3:01", hrPeak: 180, hrAvg: 174, hrRest: 117, lactate: "", note: "" },
-        { pace: "3:01", hrPeak: 181, hrAvg: 175, hrRest: 116, lactate: 4.4, note: "" },
-        { pace: "3:00", hrPeak: 182, hrAvg: 176, hrRest: 115, lactate: "", note: "" },
-        { pace: "3:00", hrPeak: 183, hrAvg: 177, hrRest: 114, lactate: 4.5, note: "" },
-        { pace: "2:58", hrPeak: 186, hrAvg: 180, hrRest: 112, lactate: 4.8, note: "ラスト全力" },
-      ]}],
-      lactateMeasurements: [{ timing: "WU後", value: 1.0 }, { timing: "5本目後", value: 4.2 }, { timing: "終了後", value: 4.8 }, { timing: "CD後", value: 1.8 }],
-    },
-  ];
-}
-
-function paceToNum(p) { if (!p) return null; const [m,s]=p.split(":").map(Number); if(isNaN(m))return null; return m+(s||0)/60; }
-function numToPace(n) { if(!n)return"—"; const min=Math.floor(n),sec=Math.round((n-min)*60); return `${min}:${sec.toString().padStart(2,"0")}`; }
-function formatPace(d,t) { if(!d||!t)return"—"; return numToPace(t/d); }
-function getWeekLabel(ds) { const d=new Date(ds),day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1),mon=new Date(d.setDate(diff)); return `${mon.getMonth()+1}/${mon.getDate()}週`; }
-const zoneColor = z => ZONES.find(x=>x.label===z)?.color||"#94a3b8";
-const IS = { width:"100%", padding:"8px 10px", background:"#0a0a14", border:"1px solid #1e293b", color:"#e2e8f0", fontSize:12, fontFamily:"'Courier New',monospace", borderRadius:3, outline:"none", boxSizing:"border-box" };
-
-function F({ label, children }) {
-  return (
-    <div>
-      <div style={{ fontSize:9, letterSpacing:3, color:"#475569", marginBottom:5, textTransform:"uppercase" }}>{label}</div>
-      {children}
-    </div>
-  );
+function load() {
+  try { const s=localStorage.getItem(STORAGE_KEY); if(s)return JSON.parse(s); } catch(e){}
+  return [{
+    id:1, date:"2026-05-28", type:"インターバル", distance:16, duration:68,
+    hrAvgSession:170, condition:5, zone:"Z4", note:"過去最高の感覚",
+    intervalSets:[{setLabel:"10×1000m", reps:[
+      {pace:"3:03",hrPeak:176,hrAvg:170,hrRest:124,lactate:3.8,note:""},
+      {pace:"3:02",hrPeak:178,hrAvg:172,hrRest:120,lactate:4.1,note:""},
+      {pace:"3:01",hrPeak:180,hrAvg:174,hrRest:117,lactate:4.4,note:""},
+      {pace:"2:58",hrPeak:186,hrAvg:180,hrRest:112,lactate:4.8,note:"ラスト全力"},
+    ]}],
+    lactateMeasurements:[{timing:"WU後",value:1.0},{timing:"終了後",value:4.8}],
+  },{
+    id:2, date:"2026-05-27", type:"回復ジョグ", distance:10, duration:58,
+    hrAvgSession:132, condition:3, zone:"Z1", note:"朝。筋肉痛あり",
+    intervalSets:[], lactateMeasurements:[],
+  },{
+    id:3, date:"2026-05-25", type:"閾値", distance:16, duration:70,
+    hrAvgSession:158, condition:4, zone:"Z3", note:"安定して走れた",
+    intervalSets:[{setLabel:"5×2000m", reps:[
+      {pace:"3:19",hrPeak:162,hrAvg:158,hrRest:130,lactate:3.5,note:""},
+      {pace:"3:18",hrPeak:163,hrAvg:159,hrRest:128,lactate:3.8,note:""},
+      {pace:"3:17",hrPeak:165,hrAvg:161,hrRest:124,lactate:4.0,note:"ラスト上げ"},
+    ]}],
+    lactateMeasurements:[{timing:"WU後",value:1.1},{timing:"終了後",value:4.0}],
+  }];
 }
 
 function App() {
-  const [sessions, setSessions] = useState(() => loadSessions());
+  const [sessions, setSessions] = useState(load);
   const [view, setView] = useState("log");
   const [editId, setEditId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
-  const emptyForm = () => ({
+  const ef = () => ({
     date: new Date().toISOString().split("T")[0],
-    type: "インターバル", distance: "", duration: "",
-    hrAvgSession: "", condition: 3, zone: "Z3", note: "",
-    intervalSets: [{ setLabel: "", reps: [emptyRep()] }],
-    lactateMeasurements: [{ timing: "", value: "" }],
+    type:"インターバル", distance:"", duration:"", hrAvgSession:"",
+    condition:3, zone:"Z3", note:"",
+    intervalSets:[{setLabel:"", reps:[er()]}],
+    lactateMeasurements:[{timing:"", value:""}],
   });
-  const [form, setForm] = useState(emptyForm());
+  const [form, setForm] = useState(ef);
 
-  function saveSessions(updated) {
+  function save(updated) {
     setSessions(updated);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch(e) {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch(e){}
   }
 
-  function addSet() { setForm(f=>({...f,intervalSets:[...f.intervalSets,{setLabel:"",reps:[emptyRep()]}]})); }
-  function removeSet(si) { setForm(f=>({...f,intervalSets:f.intervalSets.filter((_,i)=>i!==si)})); }
-  function setSetLabel(si,v) { setForm(f=>{const s=[...f.intervalSets];s[si]={...s[si],setLabel:v};return{...f,intervalSets:s};}); }
-  function addRep(si) { setForm(f=>{const s=[...f.intervalSets];s[si]={...s[si],reps:[...s[si].reps,emptyRep()]};return{...f,intervalSets:s};}); }
-  function removeRep(si,ri) { setForm(f=>{const s=[...f.intervalSets];s[si].reps=s[si].reps.filter((_,i)=>i!==ri);return{...f,intervalSets:s};}); }
-  function updateRep(si,ri,key,val) { setForm(f=>{const s=JSON.parse(JSON.stringify(f.intervalSets));s[si].reps[ri][key]=val;return{...f,intervalSets:s};}); }
-  function addLactate() { setForm(f=>({...f,lactateMeasurements:[...f.lactateMeasurements,{timing:"",value:""}]})); }
-  function removeLactate(i) { setForm(f=>({...f,lactateMeasurements:f.lactateMeasurements.filter((_,j)=>j!==i)})); }
-  function updateLactate(i,key,val) { setForm(f=>{const lm=[...f.lactateMeasurements];lm[i]={...lm[i],[key]:val};return{...f,lactateMeasurements:lm};}); }
-
-  function handleSubmit() {
+  function submit() {
     if (!form.date || !form.distance) return;
     const entry = {
       ...form, id: editId||Date.now(),
       distance: parseFloat(form.distance)||0,
       duration: parseFloat(form.duration)||0,
-      hrAvgSession: form.hrAvgSession?parseInt(form.hrAvgSession):null,
+      hrAvgSession: form.hrAvgSession ? parseInt(form.hrAvgSession) : null,
       condition: parseInt(form.condition),
       lactateMeasurements: form.lactateMeasurements.filter(m=>m.value!=="").map(m=>({...m,value:parseFloat(m.value)})),
-      intervalSets: form.intervalSets.map(set=>({...set,reps:set.reps.map(r=>({...r,hrPeak:r.hrPeak?parseInt(r.hrPeak):null,hrAvg:r.hrAvg?parseInt(r.hrAvg):null,hrRest:r.hrRest?parseInt(r.hrRest):null,lactate:r.lactate?parseFloat(r.lactate):null}))}))
+      intervalSets: form.intervalSets.map(set=>({...set, reps:set.reps.map(r=>({
+        ...r,
+        hrPeak:r.hrPeak?parseInt(r.hrPeak):null,
+        hrAvg:r.hrAvg?parseInt(r.hrAvg):null,
+        hrRest:r.hrRest?parseInt(r.hrRest):null,
+        lactate:r.lactate?parseFloat(r.lactate):null,
+      }))}))
     };
-    let updated;
-    if (editId) { updated = sessions.map(s=>s.id===editId?entry:s).sort((a,b)=>a.date.localeCompare(b.date)); setEditId(null); }
-    else { updated = [...sessions,entry].sort((a,b)=>a.date.localeCompare(b.date)); }
-    saveSessions(updated);
-    setForm(emptyForm()); setView("log");
+    const updated = editId
+      ? sessions.map(s=>s.id===editId?entry:s).sort((a,b)=>b.date.localeCompare(a.date))
+      : [entry,...sessions].sort((a,b)=>b.date.localeCompare(a.date));
+    save(updated); setEditId(null); setForm(ef()); setView("log");
   }
 
   function startEdit(s) {
-    setForm({...s, hrAvgSession:s.hrAvgSession??"", intervalSets:s.intervalSets?.length?s.intervalSets:[{setLabel:"",reps:[emptyRep()]}], lactateMeasurements:s.lactateMeasurements?.length?s.lactateMeasurements.map(m=>({...m})):[{timing:"",value:""}]});
+    setForm({...s, hrAvgSession:s.hrAvgSession??"",
+      intervalSets:s.intervalSets?.length?s.intervalSets:[{setLabel:"",reps:[er()]}],
+      lactateMeasurements:s.lactateMeasurements?.length?s.lactateMeasurements:[{timing:"",value:""}]});
     setEditId(s.id); setView("add");
   }
 
-  const weeklyData = useMemo(()=>{ const w={}; sessions.forEach(s=>{const k=getWeekLabel(s.date);if(!w[k])w[k]={week:k,distance:0};w[k].distance+=s.distance||0;}); return Object.values(w); },[sessions]);
-  const paceData = useMemo(()=>sessions.filter(s=>s.distance&&s.duration).map(s=>({date:s.date.slice(5),pace:parseFloat((s.duration/s.distance).toFixed(3)),type:s.type})).slice(-20),[sessions]);
-  const allLactatePoints = useMemo(()=>{const pts=[];sessions.forEach(s=>(s.lactateMeasurements||[]).forEach(m=>{if(m.value)pts.push({date:s.date.slice(5),value:parseFloat(m.value),timing:m.timing});}));return pts.slice(-30);},[sessions]);
-  const intervalPaceTrend = useMemo(()=>sessions.filter(s=>s.intervalSets?.length).map(s=>{const reps=s.intervalSets.flatMap(set=>set.reps),pns=reps.map(r=>paceToNum(r.pace)).filter(Boolean);if(!pns.length)return null;return{date:s.date.slice(5),avgPace:pns.reduce((a,b)=>a+b,0)/pns.length};}).filter(Boolean),[sessions]);
-  const paceTrend = useMemo(()=>{const d=paceData.slice(-6);if(d.length<3)return null;const f=d.slice(0,3).reduce((a,b)=>a+b.pace,0)/3,l=d.slice(-3).reduce((a,b)=>a+b.pace,0)/3,t=l-f;return{avg:numToPace(d.reduce((a,b)=>a+b.pace,0)/d.length),trend:Math.abs(t).toFixed(2),improving:t<0};},[paceData]);
-  const totalDistance = sessions.reduce((a,b)=>a+(b.distance||0),0);
-  const thisWeek = sessions.filter(s=>(Date.now()-new Date(s.date))/(864e5)<=7).reduce((a,b)=>a+(b.distance||0),0);
+  function updateRep(si,ri,key,val) {
+    setForm(f=>{ const s=JSON.parse(JSON.stringify(f.intervalSets)); s[si].reps[ri][key]=val; return {...f,intervalSets:s}; });
+  }
+  function addRep(si) { setForm(f=>{ const s=[...f.intervalSets]; s[si]={...s[si],reps:[...s[si].reps,er()]}; return {...f,intervalSets:s}; }); }
+  function removeRep(si,ri) { setForm(f=>{ const s=[...f.intervalSets]; s[si].reps=s[si].reps.filter((_,i)=>i!==ri); return {...f,intervalSets:s}; }); }
+  function addSet() { setForm(f=>({...f,intervalSets:[...f.intervalSets,{setLabel:"",reps:[er()]}]})); }
+  function removeSet(si) { setForm(f=>({...f,intervalSets:f.intervalSets.filter((_,i)=>i!==si)})); }
+  function setLabel(si,v) { setForm(f=>{ const s=[...f.intervalSets]; s[si]={...s[si],setLabel:v}; return {...f,intervalSets:s}; }); }
+  function addLa() { setForm(f=>({...f,lactateMeasurements:[...f.lactateMeasurements,{timing:"",value:""}]})); }
+  function removeLa(i) { setForm(f=>({...f,lactateMeasurements:f.lactateMeasurements.filter((_,j)=>j!==i)})); }
+  function updateLa(i,key,val) { setForm(f=>{ const lm=[...f.lactateMeasurements]; lm[i]={...lm[i],[key]:val}; return {...f,lactateMeasurements:lm}; }); }
 
-  return (
-    <div style={{ fontFamily:"'Courier New',monospace", background:"#06060e", minHeight:"100vh", color:"#e2e8f0", paddingBottom:40 }}>
-      <div style={{ borderBottom:"1px solid #1e293b", padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background:"#06060e", zIndex:10 }}>
-        <div>
-          <div style={{ fontSize:9, letterSpacing:6, color:"#334155" }}>TRAINING LOG</div>
-          <div style={{ fontSize:18, fontWeight:700, letterSpacing:-1, color:"#f1f5f9" }}>RUN FASTER</div>
-        </div>
-        <div style={{ display:"flex", gap:5 }}>
-          {[["log","記録"],["add",editId?"編集":"追加"],["stats","分析"]].map(([k,l])=>(
-            <button key={k} onClick={()=>{setView(k);if(k!=="add"){setForm(emptyForm());setEditId(null);}}}
-              style={{ padding:"7px 12px", fontSize:11, letterSpacing:1, border:view===k?"1px solid #38bdf8":"1px solid #1e293b", background:view===k?"#0c4a6e":"transparent", color:view===k?"#38bdf8":"#64748b", cursor:"pointer", borderRadius:3, fontFamily:"inherit" }}>
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
+  const weeklyData = useMemo(()=>{ const w={}; sessions.forEach(s=>{const k=wk(s.date);if(!w[k])w[k]={week:k,distance:0};w[k].distance+=s.distance||0;}); return Object.values(w).reverse(); },[sessions]);
+  const paceData = useMemo(()=>[...sessions].reverse().filter(s=>s.distance&&s.duration).map(s=>({date:s.date.slice(5),pace:parseFloat((s.duration/s.distance).toFixed(3))})).slice(-15),[sessions]);
+  const allLa = useMemo(()=>{ const pts=[]; [...sessions].reverse().forEach(s=>(s.lactateMeasurements||[]).forEach(m=>{if(m.value)pts.push({date:s.date.slice(5),value:parseFloat(m.value),timing:m.timing});})); return pts.slice(-25); },[sessions]);
+  const paceTrend = useMemo(()=>{ const d=paceData.slice(-6); if(d.length<3)return null; const f=d.slice(0,3).reduce((a,b)=>a+b.pace,0)/3,l=d.slice(-3).reduce((a,b)=>a+b.pace,0)/3,t=l-f; return {avg:n2p(d.reduce((a,b)=>a+b.pace,0)/d.length),trend:Math.abs(t).toFixed(2),up:t<0}; },[paceData]);
+  const total = sessions.reduce((a,b)=>a+(b.distance||0),0);
+  const tw = sessions.filter(s=>(Date.now()-new Date(s.date))/864e5<=7).reduce((a,b)=>a+(b.distance||0),0);
 
-      <div style={{ display:"flex", borderBottom:"1px solid #1e293b" }}>
-        {[["今週",`${thisWeek}km`],["総距離",`${totalDistance}km`],["記録数",`${sessions.length}本`],["傾向",paceTrend?(paceTrend.improving?`▲${paceTrend.trend}`:`▼${paceTrend.trend}`):"—"]].map(([l,v],i)=>(
-          <div key={i} style={{ flex:1, padding:"9px 10px", borderRight:"1px solid #1e293b" }}>
-            <div style={{ fontSize:8, letterSpacing:3, color:"#475569", marginBottom:2 }}>{l}</div>
-            <div style={{ fontSize:13, fontWeight:700, color:i===3?(paceTrend?.improving?"#4ade80":"#f87171"):"#f1f5f9" }}>{v}</div>
-          </div>
-        ))}
-      </div>
+  const nav = (k) => { setView(k); if(k!=="add"){setForm(ef());setEditId(null);} };
 
-      <div style={{ padding:"16px" }}>
+  return React.createElement("div", {style:{background:"#06060e",minHeight:"100vh",color:"#e2e8f0",paddingBottom:50}},
 
-        {/* ADD FORM */}
-        {view==="add" && (
-          <div>
-            <div style={{ fontSize:9, letterSpacing:4, color:"#475569", marginBottom:14 }}>{editId?"// セッション編集":"// 新規セッション"}</div>
+    // Header
+    React.createElement("div", {style:{background:"#06060e",borderBottom:"1px solid #1e293b",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}},
+      React.createElement("div", null,
+        React.createElement("div", {style:{fontSize:8,letterSpacing:6,color:"#334155"}}, "TRAINING LOG"),
+        React.createElement("div", {style:{fontSize:18,fontWeight:700,color:"#f1f5f9"}}, "RUN FASTER")
+      ),
+      React.createElement("div", {style:{display:"flex",gap:5}},
+        [["log","記録"],["add",editId?"編集":"追加"],["stats","分析"]].map(([k,l])=>
+          React.createElement("button", {key:k, onClick:()=>nav(k), style:{padding:"6px 12px",fontSize:11,border:view===k?"1px solid #38bdf8":"1px solid #1e293b",background:view===k?"#0c4a6e":"transparent",color:view===k?"#38bdf8":"#64748b",cursor:"pointer",borderRadius:3}}, l)
+        )
+      )
+    ),
 
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-              <F label="日付"><input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} style={IS}/></F>
-              <F label="種別"><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})} style={IS}>{SESSION_TYPES.map(t=><option key={t}>{t}</option>)}</select></F>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-              <F label="ゾーン"><select value={form.zone} onChange={e=>setForm({...form,zone:e.target.value})} style={{...IS,color:zoneColor(form.zone)}}>{ZONES.map(z=><option key={z.label} value={z.label} style={{color:z.color}}>{z.label} — {z.desc}</option>)}</select></F>
-              <F label={`コンディション — ${CONDITION_LABELS[form.condition-1]}`}>
-                <div style={{ display:"flex", gap:6, alignItems:"center", height:38 }}>
-                  {[1,2,3,4,5].map(n=><button key={n} onClick={()=>setForm({...form,condition:n})} style={{ width:30,height:30,borderRadius:"50%",border:"none",cursor:"pointer",background:form.condition>=n?"#38bdf8":"#1e293b",color:form.condition>=n?"#000":"#475569" }}>●</button>)}
-                </div>
-              </F>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
-              <F label="距離 (km)"><input type="number" step="0.1" placeholder="16" value={form.distance} onChange={e=>setForm({...form,distance:e.target.value})} style={IS}/></F>
-              <F label="時間 (分)"><input type="number" placeholder="70" value={form.duration} onChange={e=>setForm({...form,duration:e.target.value})} style={IS}/></F>
-              <F label="平均心拍"><input type="number" placeholder="165" value={form.hrAvgSession} onChange={e=>setForm({...form,hrAvgSession:e.target.value})} style={IS}/></F>
-            </div>
+    // Stats bar
+    React.createElement("div", {style:{display:"flex",borderBottom:"1px solid #1e293b"}},
+      [["今週",tw+"km"],["総距離",total+"km"],["記録",sessions.length+"本"],["傾向",paceTrend?(paceTrend.up?"▲"+paceTrend.trend:"▼"+paceTrend.trend):"—"]].map(([l,v],i)=>
+        React.createElement("div", {key:i, style:{flex:1,padding:"9px 10px",borderRight:"1px solid #1e293b"}},
+          React.createElement("div", {style:{fontSize:8,letterSpacing:3,color:"#475569",marginBottom:2}}, l),
+          React.createElement("div", {style:{fontSize:13,fontWeight:700,color:i===3?(paceTrend?.up?"#4ade80":"#f87171"):"#f1f5f9"}}, v)
+        )
+      )
+    ),
 
-            {form.distance&&form.duration&&(
-              <div style={{ marginBottom:12, padding:"7px 10px", background:"#0f172a", border:"1px solid #1e293b", borderRadius:3, fontSize:11, color:"#64748b" }}>
-                平均ペース <span style={{ color:"#38bdf8", fontSize:14, fontWeight:700 }}>{formatPace(form.distance,form.duration)}</span> /km
-              </div>
-            )}
+    React.createElement("div", {style:{padding:"14px 16px"}},
 
-            <div style={{ fontSize:9, letterSpacing:4, color:"#0369a1", marginBottom:8 }}>// インターバル詳細</div>
-            {form.intervalSets.map((set,si)=>(
-              <div key={si} style={{ background:"#0a0a18", border:"1px solid #1e2d40", borderRadius:4, marginBottom:8, overflow:"hidden" }}>
-                <div style={{ display:"flex", gap:6, alignItems:"center", padding:"8px 10px", borderBottom:"1px solid #1e2d40" }}>
-                  <input placeholder="セット名 (例: 8×1000m)" value={set.setLabel} onChange={e=>setSetLabel(si,e.target.value)} style={{ ...IS,flex:1,background:"transparent",border:"none",borderBottom:"1px solid #1e293b",borderRadius:0,padding:"4px 0" }}/>
-                  <button onClick={()=>addRep(si)} style={{ padding:"4px 10px", background:"#0f2d40", border:"1px solid #0369a1", color:"#38bdf8", fontSize:10, cursor:"pointer", borderRadius:3, fontFamily:"inherit" }}>+本</button>
-                  {form.intervalSets.length>1&&<button onClick={()=>removeSet(si)} style={{ padding:"4px 8px", background:"transparent", border:"1px solid #3b1f1f", color:"#f87171", fontSize:10, cursor:"pointer", borderRadius:3, fontFamily:"inherit" }}>削除</button>}
-                </div>
-                <div style={{ overflowX:"auto" }}>
-                  <table style={{ borderCollapse:"collapse", fontSize:11, minWidth:480 }}>
-                    <thead><tr style={{ background:"#0d1826" }}>
-                      {["#","ペース","HR最高","HR平均","レスト","乳酸","メモ",""].map(h=><th key={h} style={{ padding:"5px 7px", color:"#475569", fontWeight:400, fontSize:9, textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>)}
-                    </tr></thead>
-                    <tbody>
-                      {set.reps.map((rep,ri)=>(
-                        <tr key={ri} style={{ borderTop:"1px solid #1e293b" }}>
-                          <td style={{ padding:"4px 7px", color:"#475569", fontSize:10 }}>{ri+1}</td>
-                          {[["pace","3:05","text"],["hrPeak","182","number"],["hrAvg","175","number"],["hrRest","120","number"],["lactate","4.2","number"],["note","","text"]].map(([key,ph,type])=>(
-                            <td key={key} style={{ padding:"2px 3px" }}>
-                              <input type={type} step={key==="lactate"?"0.1":undefined} placeholder={ph} value={rep[key]} onChange={e=>updateRep(si,ri,key,e.target.value)}
-                                style={{ ...IS, padding:"4px 5px", fontSize:11, minWidth:key==="note"?100:46, width:"100%" }}/>
-                            </td>
-                          ))}
-                          <td style={{ padding:"2px 5px" }}>
-                            {set.reps.length>1&&<button onClick={()=>removeRep(si,ri)} style={{ background:"transparent", border:"none", color:"#475569", cursor:"pointer", fontSize:14 }}>×</button>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {set.reps.some(r=>r.pace)&&(()=>{
-                  const pcs=set.reps.map(r=>paceToNum(r.pace)).filter(Boolean);
-                  const hrs=set.reps.map(r=>parseInt(r.hrAvg)).filter(Boolean);
-                  const rsts=set.reps.map(r=>parseInt(r.hrRest)).filter(Boolean);
-                  return <div style={{ padding:"6px 10px", borderTop:"1px solid #1e2d40", fontSize:10, color:"#475569", display:"flex", gap:14, flexWrap:"wrap" }}>
-                    {pcs.length>0&&<span>avg <span style={{color:"#38bdf8"}}>{numToPace(pcs.reduce((a,b)=>a+b,0)/pcs.length)}</span></span>}
-                    {hrs.length>0&&<span>avgHR <span style={{color:"#fb923c"}}>{Math.round(hrs.reduce((a,b)=>a+b,0)/hrs.length)}</span></span>}
-                    {rsts.length>0&&<span>minRest <span style={{color:"#4ade80"}}>{Math.min(...rsts)}</span></span>}
-                  </div>;
-                })()}
-              </div>
-            ))}
-            <button onClick={addSet} style={{ padding:"7px 14px", background:"transparent", border:"1px dashed #1e293b", color:"#475569", fontSize:10, cursor:"pointer", borderRadius:3, fontFamily:"inherit", marginBottom:14 }}>+ セット追加</button>
+      // ── ADD FORM ──
+      view==="add" && React.createElement("div", null,
+        React.createElement("div", {style:{fontSize:9,letterSpacing:4,color:"#475569",marginBottom:14}}, editId?"// セッション編集":"// 新規セッション"),
 
-            <div style={{ fontSize:9, letterSpacing:4, color:"#7c3aed", marginBottom:8 }}>// 乳酸測定</div>
-            {form.lactateMeasurements.map((m,i)=>(
-              <div key={i} style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
-                <input placeholder="タイミング (WU後, 3本目後…)" value={m.timing} onChange={e=>updateLactate(i,"timing",e.target.value)} style={{ ...IS, flex:2 }}/>
-                <input type="number" step="0.1" placeholder="mmol" value={m.value} onChange={e=>updateLactate(i,"value",e.target.value)} style={{ ...IS, flex:0.8 }}/>
-                <div style={{ fontSize:10, color:parseFloat(m.value)>4?"#fb923c":parseFloat(m.value)>1.5?"#facc15":"#4ade80", minWidth:30 }}>
-                  {m.value?(parseFloat(m.value)>4?"LT2↑":parseFloat(m.value)>1.5?"LT1↑":"有酸"):""}
-                </div>
-                {form.lactateMeasurements.length>1&&<button onClick={()=>removeLactate(i)} style={{ background:"transparent", border:"none", color:"#475569", cursor:"pointer", fontSize:14 }}>×</button>}
-              </div>
-            ))}
-            <button onClick={addLactate} style={{ padding:"5px 12px", background:"transparent", border:"1px dashed #3b2a5e", color:"#7c3aed", fontSize:10, cursor:"pointer", borderRadius:3, fontFamily:"inherit", marginBottom:14 }}>+ 測定追加</button>
+        // Date / Type / Zone / Condition
+        React.createElement("div", {style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}},
+          React.createElement("div", null, lbl("日付"), React.createElement("input", {type:"date",value:form.date,onChange:e=>setForm({...form,date:e.target.value}),style:IS})),
+          React.createElement("div", null, lbl("種別"), React.createElement("select", {value:form.type,onChange:e=>setForm({...form,type:e.target.value}),style:IS}, TYPES.map(t=>React.createElement("option",{key:t},t))))
+        ),
+        React.createElement("div", {style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}},
+          React.createElement("div", null, lbl("ゾーン"), React.createElement("select", {value:form.zone,onChange:e=>setForm({...form,zone:e.target.value}),style:{...IS,color:zc(form.zone)}}, ZONES.map(z=>React.createElement("option",{key:z.label,value:z.label,style:{color:z.color}},z.label+" — "+z.desc)))),
+          React.createElement("div", null, lbl("コンディション — "+COND[form.condition-1]),
+            React.createElement("div", {style:{display:"flex",gap:6,alignItems:"center",height:38}},
+              [1,2,3,4,5].map(n=>React.createElement("button",{key:n,onClick:()=>setForm({...form,condition:n}),style:{width:30,height:30,borderRadius:"50%",border:"none",cursor:"pointer",background:form.condition>=n?"#38bdf8":"#1e293b",color:form.condition>=n?"#000":"#475569",fontSize:14}},"●"))
+            )
+          )
+        ),
+        React.createElement("div", {style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}},
+          React.createElement("div", null, lbl("距離(km)"), React.createElement("input", {type:"number",step:"0.1",placeholder:"16",value:form.distance,onChange:e=>setForm({...form,distance:e.target.value}),style:IS})),
+          React.createElement("div", null, lbl("時間(分)"), React.createElement("input", {type:"number",placeholder:"70",value:form.duration,onChange:e=>setForm({...form,duration:e.target.value}),style:IS})),
+          React.createElement("div", null, lbl("平均心拍"), React.createElement("input", {type:"number",placeholder:"165",value:form.hrAvgSession,onChange:e=>setForm({...form,hrAvgSession:e.target.value}),style:IS}))
+        ),
+        form.distance&&form.duration&&React.createElement("div",{style:{marginBottom:12,padding:"7px 10px",background:"#0f172a",border:"1px solid #1e293b",borderRadius:3,fontSize:11,color:"#64748b"}},"平均ペース ",React.createElement("span",{style:{color:"#38bdf8",fontSize:15,fontWeight:700}},fp(form.distance,form.duration))," /km"),
 
-            <F label="メモ"><textarea rows={2} placeholder="今日の感覚…" value={form.note} onChange={e=>setForm({...form,note:e.target.value})} style={{ ...IS, resize:"vertical", lineHeight:1.6 }}/></F>
+        // Interval sets
+        React.createElement("div",{style:{fontSize:9,letterSpacing:4,color:"#0369a1",marginBottom:8}},"// インターバル詳細"),
+        form.intervalSets.map((set,si)=>
+          React.createElement("div",{key:si,style:{background:"#0a0a18",border:"1px solid #1e2d40",borderRadius:4,marginBottom:8,overflow:"hidden"}},
+            React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center",padding:"8px 10px",borderBottom:"1px solid #1e2d40"}},
+              React.createElement("input",{placeholder:"セット名 (例: 8×1000m)",value:set.setLabel,onChange:e=>setLabel(si,e.target.value),style:{...IS,flex:1,background:"transparent",border:"none",borderBottom:"1px solid #1e293b",borderRadius:0,padding:"4px 0"}}),
+              React.createElement("button",{onClick:()=>addRep(si),style:{padding:"4px 10px",background:"#0f2d40",border:"1px solid #0369a1",color:"#38bdf8",fontSize:10,cursor:"pointer",borderRadius:3}},"+本"),
+              form.intervalSets.length>1&&React.createElement("button",{onClick:()=>removeSet(si),style:{padding:"4px 8px",background:"transparent",border:"1px solid #3b1f1f",color:"#f87171",fontSize:10,cursor:"pointer",borderRadius:3}},"削除")
+            ),
+            React.createElement("div",{style:{overflowX:"auto"}},
+              React.createElement("table",{style:{borderCollapse:"collapse",fontSize:11,minWidth:460}},
+                React.createElement("thead",null,React.createElement("tr",{style:{background:"#0d1826"}},
+                  ["#","ペース","HR最高","HR平均","レスト","乳酸","メモ",""].map(h=>React.createElement("th",{key:h,style:{padding:"5px 6px",color:"#475569",fontWeight:400,fontSize:9,textAlign:"left",whiteSpace:"nowrap"}},h))
+                )),
+                React.createElement("tbody",null,
+                  set.reps.map((rep,ri)=>React.createElement("tr",{key:ri,style:{borderTop:"1px solid #1e293b"}},
+                    React.createElement("td",{style:{padding:"4px 6px",color:"#475569",fontSize:10}},ri+1),
+                    ...[["pace","3:05","text"],["hrPeak","182","number"],["hrAvg","175","number"],["hrRest","120","number"],["lactate","4.2","number"],["note","","text"]].map(([key,ph,type])=>
+                      React.createElement("td",{key:key,style:{padding:"2px 3px"}},
+                        React.createElement("input",{type:type,step:key==="lactate"?"0.1":undefined,placeholder:ph,value:rep[key],onChange:e=>updateRep(si,ri,key,e.target.value),style:{...IS,padding:"4px 5px",fontSize:11,minWidth:key==="note"?90:44,width:"100%"}})
+                      )
+                    ),
+                    React.createElement("td",{style:{padding:"2px 4px"}},
+                      set.reps.length>1&&React.createElement("button",{onClick:()=>removeRep(si,ri),style:{background:"transparent",border:"none",color:"#475569",cursor:"pointer",fontSize:14}},"×")
+                    )
+                  ))
+                )
+              )
+            ),
+            (()=>{
+              const pcs=set.reps.map(r=>p2n(r.pace)).filter(Boolean);
+              const hrs=set.reps.map(r=>parseInt(r.hrAvg)).filter(Boolean);
+              const rsts=set.reps.map(r=>parseInt(r.hrRest)).filter(Boolean);
+              return pcs.length>0&&React.createElement("div",{style:{padding:"6px 10px",borderTop:"1px solid #1e2d40",fontSize:10,color:"#475569",display:"flex",gap:12,flexWrap:"wrap"}},
+                pcs.length>0&&React.createElement("span",null,"avg ",React.createElement("span",{style:{color:"#38bdf8"}},n2p(pcs.reduce((a,b)=>a+b,0)/pcs.length))),
+                hrs.length>0&&React.createElement("span",null,"avgHR ",React.createElement("span",{style:{color:"#fb923c"}},Math.round(hrs.reduce((a,b)=>a+b,0)/hrs.length))),
+                rsts.length>0&&React.createElement("span",null,"minRest ",React.createElement("span",{style:{color:"#4ade80"}},Math.min(...rsts)))
+              );
+            })()
+          )
+        ),
+        React.createElement("button",{onClick:addSet,style:{padding:"6px 14px",background:"transparent",border:"1px dashed #1e293b",color:"#475569",fontSize:10,cursor:"pointer",borderRadius:3,marginBottom:14}},"+セット追加"),
 
-            <div style={{ display:"flex", gap:8, marginTop:14 }}>
-              <button onClick={handleSubmit} style={{ flex:1, padding:"13px", background:"#0369a1", border:"none", color:"#e0f2fe", fontSize:12, letterSpacing:2, cursor:"pointer", borderRadius:3, fontFamily:"inherit" }}>{editId?"更新する":"記録する"}</button>
-              <button onClick={()=>{setView("log");setForm(emptyForm());setEditId(null);}} style={{ padding:"13px 16px", background:"transparent", border:"1px solid #1e293b", color:"#64748b", fontSize:11, cursor:"pointer", borderRadius:3, fontFamily:"inherit" }}>キャンセル</button>
-            </div>
-          </div>
-        )}
+        // Lactate
+        React.createElement("div",{style:{fontSize:9,letterSpacing:4,color:"#7c3aed",marginBottom:8}},"// 乳酸測定"),
+        form.lactateMeasurements.map((m,i)=>
+          React.createElement("div",{key:i,style:{display:"flex",gap:6,alignItems:"center",marginBottom:6}},
+            React.createElement("input",{placeholder:"タイミング (WU後, 3本目後…)",value:m.timing,onChange:e=>updateLa(i,"timing",e.target.value),style:{...IS,flex:2}}),
+            React.createElement("input",{type:"number",step:"0.1",placeholder:"mmol",value:m.value,onChange:e=>updateLa(i,"value",e.target.value),style:{...IS,flex:0.8}}),
+            React.createElement("div",{style:{fontSize:10,color:parseFloat(m.value)>4?"#fb923c":parseFloat(m.value)>1.5?"#facc15":"#4ade80",minWidth:32}},m.value?(parseFloat(m.value)>4?"LT2↑":parseFloat(m.value)>1.5?"LT1↑":"有酸"):""),
+            form.lactateMeasurements.length>1&&React.createElement("button",{onClick:()=>removeLa(i),style:{background:"transparent",border:"none",color:"#475569",cursor:"pointer",fontSize:14}},"×")
+          )
+        ),
+        React.createElement("button",{onClick:addLa,style:{padding:"5px 12px",background:"transparent",border:"1px dashed #3b2a5e",color:"#7c3aed",fontSize:10,cursor:"pointer",borderRadius:3,marginBottom:14}},"+測定追加"),
 
-        {/* LOG VIEW */}
-        {view==="log"&&(
-          <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div style={{ fontSize:9, letterSpacing:4, color:"#475569" }}>// セッション一覧</div>
-              <button onClick={()=>{setView("add");setForm(emptyForm());setEditId(null);}} style={{ padding:"7px 16px", background:"#0369a1", border:"none", color:"#e0f2fe", fontSize:11, letterSpacing:2, cursor:"pointer", borderRadius:3, fontFamily:"inherit" }}>+ 追加</button>
-            </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {[...sessions].reverse().map(s=>{
-                const expanded=expandedId===s.id;
-                const allReps=s.intervalSets?.flatMap(set=>set.reps)||[];
-                const repPaces=allReps.map(r=>paceToNum(r.pace)).filter(Boolean);
-                const avgRepPace=repPaces.length?repPaces.reduce((a,b)=>a+b,0)/repPaces.length:null;
-                const minRestHr=allReps.map(r=>r.hrRest).filter(Boolean).length?Math.min(...allReps.map(r=>r.hrRest).filter(Boolean)):null;
-                const lactateVals=s.lactateMeasurements?.filter(m=>m.value).map(m=>m.value)||[];
-                const maxLactate=lactateVals.length?Math.max(...lactateVals):null;
-                return (
-                  <div key={s.id} style={{ background:"#0a0a14", border:"1px solid #1e293b", borderRadius:5, overflow:"hidden" }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"62px 72px 1fr auto", gap:8, alignItems:"center", padding:"11px 12px", cursor:"pointer" }} onClick={()=>setExpandedId(expanded?null:s.id)}>
-                      <div style={{ fontSize:10, color:"#64748b" }}>{s.date.slice(5)}</div>
-                      <div style={{ fontSize:9, padding:"2px 6px", border:`1px solid ${zoneColor(s.zone)}44`, color:zoneColor(s.zone), borderRadius:3, textAlign:"center" }}>{s.type}</div>
-                      <div>
-                        <div style={{ fontSize:12, fontWeight:600, color:"#f1f5f9", display:"flex", gap:8, flexWrap:"wrap" }}>
-                          <span>{s.distance}km</span>
-                          <span style={{ color:"#475569", fontWeight:400 }}>{formatPace(s.distance,s.duration)}</span>
-                          {avgRepPace&&<span style={{ color:"#38bdf8" }}>rep {numToPace(avgRepPace)}</span>}
-                          {s.hrAvgSession&&<span style={{ color:"#fb923c", fontWeight:400 }}>♥{s.hrAvgSession}</span>}
-                          {minRestHr&&<span style={{ color:"#4ade80", fontWeight:400 }}>↓{minRestHr}</span>}
-                          {maxLactate&&<span style={{ color:maxLactate>4?"#f87171":maxLactate>1.5?"#facc15":"#a78bfa", fontWeight:400 }}>La{maxLactate}</span>}
-                        </div>
-                        {s.note&&<div style={{ fontSize:10, color:"#475569", marginTop:2, fontStyle:"italic" }}>{s.note}</div>}
-                      </div>
-                      <div style={{ display:"flex", gap:2, alignItems:"center" }}>
-                        {[1,2,3,4,5].map(n=><div key={n} style={{ width:4, height:4, borderRadius:"50%", background:s.condition>=n?"#38bdf8":"#1e293b" }}/>)}
-                        <span style={{ fontSize:9, color:"#475569", marginLeft:4 }}>{expanded?"▲":"▼"}</span>
-                      </div>
-                    </div>
-                    {expanded&&(
-                      <div style={{ borderTop:"1px solid #1e293b", padding:"12px" }}>
-                        {s.intervalSets?.map((set,si)=>(
-                          <div key={si} style={{ marginBottom:12 }}>
-                            <div style={{ fontSize:10, color:"#38bdf8", letterSpacing:2, marginBottom:5 }}>{set.setLabel||`セット${si+1}`}</div>
-                            <div style={{ overflowX:"auto" }}>
-                              <table style={{ borderCollapse:"collapse", fontSize:11, minWidth:460 }}>
-                                <thead><tr style={{ background:"#0d1826" }}>
-                                  {["#","ペース","HR最高","HR平均","レスト","乳酸","メモ"].map(h=><th key={h} style={{ padding:"4px 8px", color:"#475569", fontWeight:400, fontSize:9, textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>)}
-                                </tr></thead>
-                                <tbody>
-                                  {set.reps.map((r,ri)=>{
-                                    const pp=ri>0?paceToNum(set.reps[ri-1].pace):null,tp=paceToNum(r.pace),faster=pp&&tp&&tp<pp;
-                                    return <tr key={ri} style={{ borderTop:"1px solid #1a2030" }}>
-                                      <td style={{ padding:"4px 8px", color:"#475569" }}>{ri+1}</td>
-                                      <td style={{ padding:"4px 8px", fontWeight:600, color:faster?"#4ade80":"#e2e8f0" }}>{r.pace||"—"}{faster?" ↑":""}</td>
-                                      <td style={{ padding:"4px 8px", color:"#f87171" }}>{r.hrPeak||"—"}</td>
-                                      <td style={{ padding:"4px 8px", color:"#fb923c" }}>{r.hrAvg||"—"}</td>
-                                      <td style={{ padding:"4px 8px", color:"#4ade80" }}>{r.hrRest||"—"}</td>
-                                      <td style={{ padding:"4px 8px", color:r.lactate>4?"#f87171":r.lactate>1.5?"#facc15":"#a78bfa" }}>{r.lactate||"—"}</td>
-                                      <td style={{ padding:"4px 8px", color:"#64748b", fontStyle:"italic" }}>{r.note||""}</td>
-                                    </tr>;
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                            {(()=>{const pcs=set.reps.map(r=>paceToNum(r.pace)).filter(Boolean),has=set.reps.map(r=>parseInt(r.hrAvg)).filter(Boolean),rsts=set.reps.map(r=>parseInt(r.hrRest)).filter(Boolean);return <div style={{ fontSize:10, color:"#475569", marginTop:5, display:"flex", gap:12, flexWrap:"wrap" }}>
-                              {pcs.length>0&&<span>avg <span style={{color:"#38bdf8"}}>{numToPace(pcs.reduce((a,b)=>a+b,0)/pcs.length)}</span></span>}
-                              {pcs.length>0&&<span>best <span style={{color:"#4ade80"}}>{numToPace(Math.min(...pcs))}</span></span>}
-                              {has.length>0&&<span>avgHR <span style={{color:"#fb923c"}}>{Math.round(has.reduce((a,b)=>a+b,0)/has.length)}</span></span>}
-                              {rsts.length>0&&<span>minRest <span style={{color:"#4ade80"}}>{Math.min(...rsts)}</span></span>}
-                            </div>;})()} 
-                          </div>
-                        ))}
-                        {s.lactateMeasurements?.filter(m=>m.value).length>0&&(
-                          <div style={{ marginBottom:10 }}>
-                            <div style={{ fontSize:9, letterSpacing:3, color:"#7c3aed", marginBottom:5 }}>乳酸タイムライン</div>
-                            <div style={{ display:"flex", gap:6, alignItems:"flex-end", flexWrap:"wrap" }}>
-                              {s.lactateMeasurements.filter(m=>m.value).map((m,i)=>{
-                                const pct=Math.min(100,(m.value/7)*100),col=m.value>4?"#f87171":m.value>1.5?"#facc15":"#4ade80";
-                                return <div key={i} style={{ textAlign:"center", minWidth:52 }}>
-                                  <div style={{ fontSize:11, fontWeight:700, color:col, marginBottom:2 }}>{m.value}</div>
-                                  <div style={{ height:44, width:36, margin:"0 auto", background:"#1e293b", borderRadius:3, display:"flex", alignItems:"flex-end", overflow:"hidden" }}>
-                                    <div style={{ width:"100%", height:`${pct}%`, background:col, minHeight:3 }}/>
-                                  </div>
-                                  <div style={{ fontSize:9, color:"#475569", marginTop:3 }}>{m.timing}</div>
-                                </div>;
-                              })}
-                            </div>
-                          </div>
-                        )}
-                        <div style={{ display:"flex", gap:8 }}>
-                          <button onClick={()=>startEdit(s)} style={{ padding:"5px 12px", background:"transparent", border:"1px solid #1e293b", color:"#64748b", fontSize:11, cursor:"pointer", borderRadius:3, fontFamily:"inherit" }}>編集</button>
-                          <button onClick={()=>{saveSessions(sessions.filter(x=>x.id!==s.id));setExpandedId(null);}} style={{ padding:"5px 12px", background:"transparent", border:"1px solid #3b1f1f", color:"#f87171", fontSize:11, cursor:"pointer", borderRadius:3, fontFamily:"inherit" }}>削除</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        // Note
+        React.createElement("div",null,lbl("メモ"),React.createElement("textarea",{rows:2,placeholder:"今日の感覚…",value:form.note,onChange:e=>setForm({...form,note:e.target.value}),style:{...IS,resize:"vertical",lineHeight:1.6}})),
 
-        {/* STATS VIEW */}
-        {view==="stats"&&(
-          <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
-            <div style={{ fontSize:9, letterSpacing:4, color:"#475569" }}>// 分析・予測</div>
-            {paceTrend&&(
-              <div style={{ padding:"16px", background:"#0a0a14", border:`1px solid ${paceTrend.improving?"#166534":"#7f1d1d"}`, borderRadius:6 }}>
-                <div style={{ fontSize:9, letterSpacing:4, color:"#475569", marginBottom:5 }}>トレンド予測</div>
-                <div style={{ fontSize:22, fontWeight:700, color:paceTrend.improving?"#4ade80":"#f87171" }}>{paceTrend.improving?"▲ 改善中":"▼ 要注意"}</div>
-                <div style={{ fontSize:12, color:"#94a3b8", marginTop:5 }}>
-                  平均 <span style={{color:"#f1f5f9"}}>{paceTrend.avg}/km</span>。{paceTrend.improving?` ${paceTrend.trend}分速くなっています。`:`${paceTrend.trend}分落ちています。回復を優先。`}
-                </div>
-              </div>
-            )}
-            <div>
-              <div style={{ fontSize:9, letterSpacing:3, color:"#475569", marginBottom:8 }}>週間走行距離 (km)</div>
-              <ResponsiveContainer width="100%" height={130}><BarChart data={weeklyData} margin={{top:0,right:0,bottom:0,left:-20}}>
-                <XAxis dataKey="week" tick={{fill:"#475569",fontSize:9}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:"#475569",fontSize:9}} axisLine={false} tickLine={false}/>
-                <Tooltip contentStyle={{background:"#0f172a",border:"1px solid #1e293b",fontSize:11,fontFamily:"Courier New"}}/>
-                <Bar dataKey="distance" fill="#0369a1" radius={[3,3,0,0]}/>
-              </BarChart></ResponsiveContainer>
-            </div>
-            <div>
-              <div style={{ fontSize:9, letterSpacing:3, color:"#475569", marginBottom:8 }}>ペース推移</div>
-              <ResponsiveContainer width="100%" height={130}><LineChart data={paceData} margin={{top:0,right:0,bottom:0,left:-20}}>
-                <XAxis dataKey="date" tick={{fill:"#475569",fontSize:9}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:"#475569",fontSize:9}} axisLine={false} tickLine={false} reversed domain={["auto","auto"]}/>
-                <Tooltip contentStyle={{background:"#0f172a",border:"1px solid #1e293b",fontSize:11,fontFamily:"Courier New"}} formatter={v=>[numToPace(v)+" /km","ペース"]}/>
-                <Line type="monotone" dataKey="pace" stroke="#38bdf8" strokeWidth={2} dot={{r:3,fill:"#38bdf8"}}/>
-              </LineChart></ResponsiveContainer>
-            </div>
-            {intervalPaceTrend.length>1&&(
-              <div>
-                <div style={{ fontSize:9, letterSpacing:3, color:"#475569", marginBottom:8 }}>インターバルrepペース推移</div>
-                <ResponsiveContainer width="100%" height={130}><LineChart data={intervalPaceTrend} margin={{top:0,right:0,bottom:0,left:-20}}>
-                  <XAxis dataKey="date" tick={{fill:"#475569",fontSize:9}} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{fill:"#475569",fontSize:9}} axisLine={false} tickLine={false} reversed domain={["auto","auto"]}/>
-                  <Tooltip contentStyle={{background:"#0f172a",border:"1px solid #1e293b",fontSize:11,fontFamily:"Courier New"}} formatter={v=>[numToPace(v)+" /km","rep avg"]}/>
-                  <Line type="monotone" dataKey="avgPace" stroke="#4ade80" strokeWidth={2} dot={{r:3,fill:"#4ade80"}}/>
-                </LineChart></ResponsiveContainer>
-              </div>
-            )}
-            {allLactatePoints.length>1&&(
-              <div>
-                <div style={{ fontSize:9, letterSpacing:3, color:"#475569", marginBottom:8 }}>乳酸値 全測定ポイント</div>
-                <ResponsiveContainer width="100%" height={150}><LineChart data={allLactatePoints} margin={{top:0,right:0,bottom:0,left:-20}}>
-                  <XAxis dataKey="date" tick={{fill:"#475569",fontSize:9}} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{fill:"#475569",fontSize:9}} axisLine={false} tickLine={false} domain={[0,7]}/>
-                  <Tooltip contentStyle={{background:"#0f172a",border:"1px solid #1e293b",fontSize:11,fontFamily:"Courier New"}} formatter={(v,n,p)=>[`${v} mmol (${p.payload.timing})`,""]}/>
-                  <ReferenceLine y={1.5} stroke="#4ade8055" strokeDasharray="4 4" label={{value:"LT1",fill:"#4ade80",fontSize:9}}/>
-                  <ReferenceLine y={4} stroke="#fb923c55" strokeDasharray="4 4" label={{value:"LT2",fill:"#fb923c",fontSize:9}}/>
-                  <Line type="monotone" dataKey="value" stroke="#a78bfa" strokeWidth={1.5} dot={{r:4,fill:"#a78bfa"}}/>
-                </LineChart></ResponsiveContainer>
-              </div>
-            )}
-            <div>
-              <div style={{ fontSize:9, letterSpacing:3, color:"#475569", marginBottom:8 }}>ゾーン分布</div>
-              <div style={{ display:"flex", gap:5 }}>
-                {ZONES.map(z=>{const count=sessions.filter(s=>s.zone===z.label).length,pct=sessions.length?Math.round(count/sessions.length*100):0;return(
-                  <div key={z.label} style={{ flex:1, textAlign:"center" }}>
-                    <div style={{ height:60, background:"#1e293b", borderRadius:3, display:"flex", alignItems:"flex-end", overflow:"hidden" }}>
-                      <div style={{ width:"100%", height:`${pct}%`, background:z.color, minHeight:pct>0?3:0 }}/>
-                    </div>
-                    <div style={{ fontSize:9, color:z.color, marginTop:2 }}>{z.label}</div>
-                    <div style={{ fontSize:8, color:"#475569" }}>{pct}%</div>
-                  </div>
-                );})}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+        React.createElement("div",{style:{display:"flex",gap:8,marginTop:14}},
+          React.createElement("button",{onClick:submit,style:{flex:1,padding:"13px",background:"#0369a1",border:"none",color:"#e0f2fe",fontSize:12,letterSpacing:2,cursor:"pointer",borderRadius:3}},editId?"更新する":"記録する"),
+          React.createElement("button",{onClick:()=>{nav("log");},style:{padding:"13px 16px",background:"transparent",border:"1px solid #1e293b",color:"#64748b",fontSize:11,cursor:"pointer",borderRadius:3}},"キャンセル")
+        )
+      ),
+
+      // ── LOG VIEW ──
+      view==="log" && React.createElement("div",null,
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+          React.createElement("div",{style:{fontSize:9,letterSpacing:4,color:"#475569"}},"// セッション一覧"),
+          React.createElement("button",{onClick:()=>nav("add"),style:{padding:"7px 16px",background:"#0369a1",border:"none",color:"#e0f2fe",fontSize:11,cursor:"pointer",borderRadius:3}},"+追加")
+        ),
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+          sessions.map(s=>{
+            const exp=expandedId===s.id;
+            const allReps=s.intervalSets?.flatMap(x=>x.reps)||[];
+            const rPaces=allReps.map(r=>p2n(r.pace)).filter(Boolean);
+            const avgRP=rPaces.length?rPaces.reduce((a,b)=>a+b,0)/rPaces.length:null;
+            const minRest=allReps.map(r=>r.hrRest).filter(Boolean);
+            const laVals=s.lactateMeasurements?.filter(m=>m.value).map(m=>m.value)||[];
+            const maxLa=laVals.length?Math.max(...laVals):null;
+            return React.createElement("div",{key:s.id,style:{background:"#0a0a14",border:"1px solid #1e293b",borderRadius:5,overflow:"hidden"}},
+              React.createElement("div",{style:{display:"grid",gridTemplateColumns:"60px 70px 1fr auto",gap:8,alignItems:"center",padding:"11px 12px",cursor:"pointer"},onClick:()=>setExpandedId(exp?null:s.id)},
+                React.createElement("div",{style:{fontSize:10,color:"#64748b"}},s.date.slice(5)),
+                React.createElement("div",{style:{fontSize:9,padding:"2px 5px",border:"1px solid "+zc(s.zone)+"44",color:zc(s.zone),borderRadius:3,textAlign:"center"}},s.type),
+                React.createElement("div",null,
+                  React.createElement("div",{style:{fontSize:12,fontWeight:600,color:"#f1f5f9",display:"flex",gap:8,flexWrap:"wrap"}},
+                    React.createElement("span",null,s.distance+"km"),
+                    React.createElement("span",{style:{color:"#475569",fontWeight:400}},fp(s.distance,s.duration)),
+                    avgRP&&React.createElement("span",{style:{color:"#38bdf8"}},"rep "+n2p(avgRP)),
+                    s.hrAvgSession&&React.createElement("span",{style:{color:"#fb923c",fontWeight:400}},"♥"+s.hrAvgSession),
+                    minRest.length>0&&React.createElement("span",{style:{color:"#4ade80",fontWeight:400}},"↓"+Math.min(...minRest)),
+                    maxLa&&React.createElement("span",{style:{color:maxLa>4?"#f87171":maxLa>1.5?"#facc15":"#a78bfa",fontWeight:400}},"La"+maxLa)
+                  ),
+                  s.note&&React.createElement("div",{style:{fontSize:10,color:"#475569",marginTop:2,fontStyle:"italic"}},s.note)
+                ),
+                React.createElement("div",{style:{display:"flex",gap:2,alignItems:"center"}},
+                  [1,2,3,4,5].map(n=>React.createElement("div",{key:n,style:{width:4,height:4,borderRadius:"50%",background:s.condition>=n?"#38bdf8":"#1e293b"}})),
+                  React.createElement("span",{style:{fontSize:9,color:"#475569",marginLeft:4}},exp?"▲":"▼")
+                )
+              ),
+              exp&&React.createElement("div",{style:{borderTop:"1px solid #1e293b",padding:"12px"}},
+                s.intervalSets?.map((set,si)=>
+                  React.createElement("div",{key:si,style:{marginBottom:12}},
+                    React.createElement("div",{style:{fontSize:10,color:"#38bdf8",letterSpacing:2,marginBottom:5}},set.setLabel||"セット"+(si+1)),
+                    React.createElement("div",{style:{overflowX:"auto"}},
+                      React.createElement("table",{style:{borderCollapse:"collapse",fontSize:11,minWidth:420}},
+                        React.createElement("thead",null,React.createElement("tr",{style:{background:"#0d1826"}},
+                          ["#","ペース","HR最","HR均","レスト","乳酸","メモ"].map(h=>React.createElement("th",{key:h,style:{padding:"4px 7px",color:"#475569",fontWeight:400,fontSize:9,textAlign:"left",whiteSpace:"nowrap"}},h))
+                        )),
+                        React.createElement("tbody",null,
+                          set.reps.map((r,ri)=>{
+                            const pp=ri>0?p2n(set.reps[ri-1].pace):null,tp=p2n(r.pace),faster=pp&&tp&&tp<pp;
+                            return React.createElement("tr",{key:ri,style:{borderTop:"1px solid #1a2030"}},
+                              React.createElement("td",{style:{padding:"4px 7px",color:"#475569"}},ri+1),
+                              React.createElement("td",{style:{padding:"4px 7px",fontWeight:600,color:faster?"#4ade80":"#e2e8f0"}},r.pace||"—",faster?" ↑":""),
+                              React.createElement("td",{style:{padding:"4px 7px",color:"#f87171"}},r.hrPeak||"—"),
+                              React.createElement("td",{style:{padding:"4px 7px",color:"#fb923c"}},r.hrAvg||"—"),
+                              React.createElement("td",{style:{padding:"4px 7px",color:"#4ade80"}},r.hrRest||"—"),
+                              React.createElement("td",{style:{padding:"4px 7px",color:r.lactate>4?"#f87171":r.lactate>1.5?"#facc15":"#a78bfa"}},r.lactate||"—"),
+                              React.createElement("td",{style:{padding:"4px 7px",color:"#64748b",fontStyle:"italic"}},r.note||"")
+                            );
+                          })
+                        )
+                      )
+                    ),
+                    (()=>{
+                      const pcs=set.reps.map(r=>p2n(r.pace)).filter(Boolean);
+                      const has=set.reps.map(r=>parseInt(r.hrAvg)).filter(Boolean);
+                      const rsts=set.reps.map(r=>parseInt(r.hrRest)).filter(Boolean);
+                      return React.createElement("div",{style:{fontSize:10,color:"#475569",marginTop:5,display:"flex",gap:12,flexWrap:"wrap"}},
+                        pcs.length>0&&React.createElement("span",null,"avg ",React.createElement("span",{style:{color:"#38bdf8"}},n2p(pcs.reduce((a,b)=>a+b,0)/pcs.length))),
+                        pcs.length>0&&React.createElement("span",null,"best ",React.createElement("span",{style:{color:"#4ade80"}},n2p(Math.min(...pcs)))),
+                        has.length>0&&React.createElement("span",null,"avgHR ",React.createElement("span",{style:{color:"#fb923c"}},Math.round(has.reduce((a,b)=>a+b,0)/has.length))),
+                        rsts.length>0&&React.createElement("span",null,"minRest ",React.createElement("span",{style:{color:"#4ade80"}},Math.min(...rsts)))
+                      );
+                    })()
+                  )
+                ),
+                s.lactateMeasurements?.filter(m=>m.value).length>0&&React.createElement("div",{style:{marginBottom:10}},
+                  React.createElement("div",{style:{fontSize:9,letterSpacing:3,color:"#7c3aed",marginBottom:5}},"乳酸タイムライン"),
+                  React.createElement("div",{style:{display:"flex",gap:6,alignItems:"flex-end",flexWrap:"wrap"}},
+                    s.lactateMeasurements.filter(m=>m.value).map((m,i)=>{
+                      const pct=Math.min(100,(m.value/7)*100),col=m.value>4?"#f87171":m.value>1.5?"#facc15":"#4ade80";
+                      return React.createElement("div",{key:i,style:{textAlign:"center",minWidth:50}},
+                        React.createElement("div",{style:{fontSize:11,fontWeight:700,color:col,marginBottom:2}},m.value),
+                        React.createElement("div",{style:{height:42,width:34,margin:"0 auto",background:"#1e293b",borderRadius:3,display:"flex",alignItems:"flex-end",overflow:"hidden"}},
+                          React.createElement("div",{style:{width:"100%",height:pct+"%",background:col,minHeight:3}})
+                        ),
+                        React.createElement("div",{style:{fontSize:9,color:"#475569",marginTop:3}},m.timing)
+                      );
+                    })
+                  )
+                ),
+                React.createElement("div",{style:{display:"flex",gap:8,marginTop:4}},
+                  React.createElement("button",{onClick:()=>startEdit(s),style:{padding:"5px 12px",background:"transparent",border:"1px solid #1e293b",color:"#64748b",fontSize:11,cursor:"pointer",borderRadius:3}},"編集"),
+                  React.createElement("button",{onClick:()=>{save(sessions.filter(x=>x.id!==s.id));setExpandedId(null);},style:{padding:"5px 12px",background:"transparent",border:"1px solid #3b1f1f",color:"#f87171",fontSize:11,cursor:"pointer",borderRadius:3}},"削除")
+                )
+              )
+            );
+          })
+        )
+      ),
+
+      // ── STATS VIEW ──
+      view==="stats" && React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:22}},
+        React.createElement("div",{style:{fontSize:9,letterSpacing:4,color:"#475569"}},"// 分析・予測"),
+        paceTrend&&React.createElement("div",{style:{padding:"16px",background:"#0a0a14",border:"1px solid "+(paceTrend.up?"#166534":"#7f1d1d"),borderRadius:6}},
+          React.createElement("div",{style:{fontSize:9,letterSpacing:4,color:"#475569",marginBottom:5}},"トレンド予測"),
+          React.createElement("div",{style:{fontSize:22,fontWeight:700,color:paceTrend.up?"#4ade80":"#f87171"}},paceTrend.up?"▲ 改善中":"▼ 要注意"),
+          React.createElement("div",{style:{fontSize:12,color:"#94a3b8",marginTop:5}},"平均 ",React.createElement("span",{style:{color:"#f1f5f9"}},paceTrend.avg+"/km"),"。",paceTrend.up?" "+paceTrend.trend+"分速くなっています。":paceTrend.trend+"分落ちています。回復を優先。")
+        ),
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:9,letterSpacing:3,color:"#475569",marginBottom:8}},"週間走行距離 (km)"),
+          React.createElement(ResponsiveContainer,{width:"100%",height:130},
+            React.createElement(BarChart,{data:weeklyData,margin:{top:0,right:0,bottom:0,left:-20}},
+              React.createElement(XAxis,{dataKey:"week",tick:{fill:"#475569",fontSize:9},axisLine:false,tickLine:false}),
+              React.createElement(YAxis,{tick:{fill:"#475569",fontSize:9},axisLine:false,tickLine:false}),
+              React.createElement(Tooltip,{contentStyle:{background:"#0f172a",border:"1px solid #1e293b",fontSize:11}}),
+              React.createElement(Bar,{dataKey:"distance",fill:"#0369a1",radius:[3,3,0,0]})
+            )
+          )
+        ),
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:9,letterSpacing:3,color:"#475569",marginBottom:8}},"ペース推移"),
+          React.createElement(ResponsiveContainer,{width:"100%",height:130},
+            React.createElement(LineChart,{data:paceData,margin:{top:0,right:0,bottom:0,left:-20}},
+              React.createElement(XAxis,{dataKey:"date",tick:{fill:"#475569",fontSize:9},axisLine:false,tickLine:false}),
+              React.createElement(YAxis,{tick:{fill:"#475569",fontSize:9},axisLine:false,tickLine:false,reversed:true,domain:["auto","auto"]}),
+              React.createElement(Tooltip,{contentStyle:{background:"#0f172a",border:"1px solid #1e293b",fontSize:11},formatter:v=>[n2p(v)+" /km","ペース"]}),
+              React.createElement(Line,{type:"monotone",dataKey:"pace",stroke:"#38bdf8",strokeWidth:2,dot:{r:3,fill:"#38bdf8"}})
+            )
+          )
+        ),
+        allLa.length>1&&React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:9,letterSpacing:3,color:"#475569",marginBottom:8}},"乳酸値 全測定ポイント"),
+          React.createElement(ResponsiveContainer,{width:"100%",height:150},
+            React.createElement(LineChart,{data:allLa,margin:{top:0,right:0,bottom:0,left:-20}},
+              React.createElement(XAxis,{dataKey:"date",tick:{fill:"#475569",fontSize:9},axisLine:false,tickLine:false}),
+              React.createElement(YAxis,{tick:{fill:"#475569",fontSize:9},axisLine:false,tickLine:false,domain:[0,7]}),
+              React.createElement(Tooltip,{contentStyle:{background:"#0f172a",border:"1px solid #1e293b",fontSize:11},formatter:(v,n,p)=>[v+" mmol ("+p.payload.timing+")","乳酸"]}),
+              React.createElement(ReferenceLine,{y:1.5,stroke:"#4ade8055",strokeDasharray:"4 4",label:{value:"LT1",fill:"#4ade80",fontSize:9}}),
+              React.createElement(ReferenceLine,{y:4,stroke:"#fb923c55",strokeDasharray:"4 4",label:{value:"LT2",fill:"#fb923c",fontSize:9}}),
+              React.createElement(Line,{type:"monotone",dataKey:"value",stroke:"#a78bfa",strokeWidth:2,dot:{r:4,fill:"#a78bfa"}})
+            )
+          )
+        ),
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:9,letterSpacing:3,color:"#475569",marginBottom:8}},"ゾーン分布"),
+          React.createElement("div",{style:{display:"flex",gap:5}},
+            ZONES.map(z=>{
+              const cnt=sessions.filter(s=>s.zone===z.label).length,pct=sessions.length?Math.round(cnt/sessions.length*100):0;
+              return React.createElement("div",{key:z.label,style:{flex:1,textAlign:"center"}},
+                React.createElement("div",{style:{height:60,background:"#1e293b",borderRadius:3,display:"flex",alignItems:"flex-end",overflow:"hidden"}},
+                  React.createElement("div",{style:{width:"100%",height:pct+"%",background:z.color,minHeight:pct>0?3:0}})
+                ),
+                React.createElement("div",{style:{fontSize:9,color:z.color,marginTop:2}},z.label),
+                React.createElement("div",{style:{fontSize:8,color:"#475569"}},pct+"%")
+              );
+            })
+          )
+        )
+      )
+    )
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+function lbl(text) {
+  return React.createElement("div",{style:{fontSize:9,letterSpacing:3,color:"#475569",marginBottom:5,textTransform:"uppercase"}},text);
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
   </script>
 </body>
 </html>
+EOF
+echo "done"
