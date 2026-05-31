@@ -151,10 +151,13 @@ input,select,textarea,button{font-family:'Courier New',monospace;-webkit-appeara
       <div style="display:flex;gap:6px;align-items:center;height:38px" id="cond-btns"></div>
     </div>
   </div>
-  <div class="grid3">
+  <div class="grid2">
     <div class="field"><label>距離(km)</label><input type="number" id="f-dist" step="0.1" placeholder="16" oninput="updatePacePreview()"></div>
-    <div class="field"><label>時間(分)</label><input type="number" id="f-dur" placeholder="70" oninput="updatePacePreview()"></div>
     <div class="field"><label>平均心拍</label><input type="number" id="f-hr" placeholder="165"></div>
+  </div>
+  <div class="grid2">
+    <div class="field"><label>時間 — 分</label><input type="number" id="f-dur-m" placeholder="58" min="0" oninput="updatePacePreview()"></div>
+    <div class="field"><label>時間 — 秒</label><input type="number" id="f-dur-s" placeholder="30" min="0" max="59" oninput="updatePacePreview()"></div>
   </div>
   <div class="pace-preview" id="pace-preview" style="display:none">平均ペース <span id="pace-val"></span> /km</div>
 
@@ -209,25 +212,32 @@ let formLa=[];
 function p2n(p){if(!p)return null;const[m,s]=p.split(":").map(Number);return isNaN(m)?null:m+(s||0)/60;}
 function n2p(n){if(!n||isNaN(n))return"—";const m=Math.floor(n),s=Math.round((n-m)*60);return m+":"+(s<10?"0":"")+s;}
 function fp(d,t){return(!d||!t)?"—":n2p(t/d);}
+// time string "1:08" or "68" or "1:08.5" -> total seconds
+function t2s(t){if(!t)return null;t=(""+t).trim();if(t.indexOf(":")>=0){const[m,s]=t.split(":");const mm=parseFloat(m),ss=parseFloat(s);return isNaN(mm)?null:mm*60+(ss||0);}const v=parseFloat(t);return isNaN(v)?null:v;}
+// seconds -> "1:08"
+function s2t(sec){if(sec==null||isNaN(sec))return"—";const m=Math.floor(sec/60),s=sec-m*60;const ss=(Math.round(s*10)/10);return m>0?(m+":"+(ss<10?"0":"")+ss):(""+ss);}
+// pace per km (min/km) from distance(m) and time(sec)
+function repPace(distM,timeSec){if(!distM||!timeSec)return null;return (timeSec/(distM/1000))/60;}
 function wk(ds){const d=new Date(ds),dy=d.getDay(),diff=d.getDate()-dy+(dy===0?-6:1),mo=new Date(d.setDate(diff));return(mo.getMonth()+1)+"/"+(mo.getDate());}
 function zc(z){return ZONES[z]||"#94a3b8";}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(sessions));}catch(e){}}
 function load(){try{const s=localStorage.getItem(KEY);if(s)sessions=JSON.parse(s);}catch(e){}
   if(!sessions.length)sessions=[
     {id:1,date:"2026-05-28",type:"インターバル",distance:16,duration:68,hrAvgSession:170,condition:5,zone:"Z4",note:"過去最高の感覚",
-     intervalSets:[{setLabel:"10×1000m",reps:[
-       {pace:"3:03",hrPeak:176,hrAvg:170,hrRest:124,lactate:3.8,note:""},
-       {pace:"3:02",hrPeak:178,hrAvg:172,hrRest:120,lactate:4.1,note:""},
-       {pace:"3:00",hrPeak:182,hrAvg:176,hrRest:115,lactate:4.5,note:""},
-       {pace:"2:58",hrPeak:186,hrAvg:180,hrRest:112,lactate:4.8,note:"ラスト全力"},
+     intervalSets:[{setLabel:"インターバル",setDist:1000,restType:"jog",reps:[
+       {time:"3:03",dist:"",hrPeak:176,hrAvg:170,hrRest:124,rest:"90",lactate:3.8,note:""},
+       {time:"3:02",dist:"",hrPeak:178,hrAvg:172,hrRest:120,rest:"90",lactate:4.1,note:""},
+       {time:"3:00",dist:"",hrPeak:182,hrAvg:176,hrRest:115,rest:"90",lactate:4.5,note:""},
+       {time:"2:58",dist:"",hrPeak:186,hrAvg:180,hrRest:112,rest:"90",lactate:4.8,note:"ラスト全力"},
      ]}],
      lactateMeasurements:[{timing:"WU後",value:1.0},{timing:"5本目後",value:4.2},{timing:"終了後",value:4.8}]},
     {id:2,date:"2026-05-27",type:"回復ジョグ",distance:10,duration:58,hrAvgSession:132,condition:3,zone:"Z1",note:"朝。筋肉痛あり",intervalSets:[],lactateMeasurements:[]},
     {id:3,date:"2026-05-25",type:"閾値",distance:16,duration:70,hrAvgSession:158,condition:4,zone:"Z3",note:"安定して走れた",
-     intervalSets:[{setLabel:"5×2000m",reps:[
-       {pace:"3:19",hrPeak:162,hrAvg:158,hrRest:130,lactate:3.5,note:""},
-       {pace:"3:18",hrPeak:163,hrAvg:159,hrRest:128,lactate:3.8,note:""},
-       {pace:"3:17",hrPeak:165,hrAvg:161,hrRest:124,lactate:4.0,note:"ラスト上げ"},
+     intervalSets:[{setLabel:"変化走",setDist:"",restType:"jog",reps:[
+       {time:"3:18",dist:1000,hrPeak:162,hrAvg:158,hrRest:130,rest:"60",lactate:3.5,note:""},
+       {time:"6:36",dist:2000,hrPeak:163,hrAvg:159,hrRest:128,rest:"60",lactate:3.8,note:""},
+       {time:"3:16",dist:1000,hrPeak:165,hrAvg:161,hrRest:124,rest:"60",lactate:4.0,note:""},
+       {time:"6:30",dist:2000,hrPeak:167,hrAvg:163,hrRest:122,rest:"",lactate:4.2,note:"ラスト上げ"},
      ]}],
      lactateMeasurements:[{timing:"WU後",value:1.1},{timing:"終了後",value:4.0}]},
   ];
@@ -263,7 +273,9 @@ function updateZoneColor(){
 
 function updatePacePreview(){
   const d=parseFloat(document.getElementById("f-dist").value);
-  const t=parseFloat(document.getElementById("f-dur").value);
+  const dm=parseFloat(document.getElementById("f-dur-m").value)||0;
+  const ds=parseFloat(document.getElementById("f-dur-s").value)||0;
+  const t=dm+(ds/60);
   const p=document.getElementById("pace-preview");
   if(d&&t){p.style.display="block";document.getElementById("pace-val").textContent=n2p(t/d);}
   else p.style.display="none";
@@ -274,27 +286,49 @@ function renderSets(){
   const c=document.getElementById("sets-container");c.innerHTML="";
   formSets.forEach((set,si)=>{
     const box=document.createElement("div");box.className="set-box";
-    // header
+    // header: label + default distance + rest type
     const hdr=document.createElement("div");hdr.className="set-header";
-    const inp=document.createElement("input");inp.placeholder="セット名 (例: 8×1000m)";inp.value=set.setLabel;
+    const inp=document.createElement("input");inp.placeholder="セット名 (例: インターバル)";inp.value=set.setLabel;
     inp.oninput=e=>formSets[si].setLabel=e.target.value;
-    const addRepBtn=document.createElement("button");addRepBtn.className="btn-add-rep";addRepBtn.textContent="+本";addRepBtn.onclick=()=>{formSets[si].reps.push({pace:"",hrPeak:"",hrAvg:"",hrRest:"",lactate:"",note:""});renderSets();};
-    hdr.appendChild(inp);hdr.appendChild(addRepBtn);
+    const distInp=document.createElement("input");distInp.type="number";distInp.placeholder="既定m";distInp.value=set.setDist||"";
+    distInp.style.flex="0";distInp.style.width="64px";distInp.style.borderBottom="1px solid #0369a1";distInp.style.color="#38bdf8";
+    distInp.oninput=e=>{formSets[si].setDist=e.target.value?parseFloat(e.target.value):"";renderSets();};
+    const restSel=document.createElement("select");restSel.style="flex:0;width:74px;background:#0a0a14;border:1px solid #1e293b;color:#4ade80;border-radius:3px;padding:3px;font-size:10px";
+    ["jog","その場"].forEach(o=>{const op=document.createElement("option");op.value=o;op.textContent="休:"+o;if((set.restType||"jog")===o)op.selected=true;restSel.appendChild(op);});
+    restSel.onchange=e=>{formSets[si].restType=e.target.value;};
+    const addRepBtn=document.createElement("button");addRepBtn.className="btn-add-rep";addRepBtn.textContent="+本";addRepBtn.onclick=()=>{formSets[si].reps.push({time:"",dist:"",hrPeak:"",hrAvg:"",hrRest:"",rest:"",lactate:"",note:""});renderSets();};
+    hdr.appendChild(inp);hdr.appendChild(distInp);hdr.appendChild(restSel);hdr.appendChild(addRepBtn);
     if(formSets.length>1){const db=document.createElement("button");db.className="btn-del-set";db.textContent="削除";db.onclick=()=>{formSets.splice(si,1);renderSets();};hdr.appendChild(db);}
     box.appendChild(hdr);
     // table
     const wrap=document.createElement("div");wrap.style.overflowX="auto";
     const tbl=document.createElement("table");tbl.className="rep-table";
-    tbl.innerHTML='<thead><tr><th>#</th><th>ペース</th><th>HR最高</th><th>HR平均</th><th>レスト</th><th>乳酸</th><th>メモ</th><th></th></tr></thead>';
+    tbl.innerHTML='<thead><tr><th>#</th><th>距離m</th><th>タイム</th><th>ペース</th><th>HR最高</th><th>HR平均</th><th>レスト後HR</th><th>つなぎ秒</th><th>乳酸</th><th>メモ</th><th></th></tr></thead>';
     const tbody=document.createElement("tbody");
     set.reps.forEach((rep,ri)=>{
       const tr=document.createElement("tr");
       tr.innerHTML=`<td style="color:#475569;padding:4px 6px">${ri+1}</td>`;
-      [["pace","3:05","text"],["hrPeak","182","number"],["hrAvg","175","number"],["hrRest","120","number"],["lactate","4.2","number"],["note","","text"]].forEach(([key,ph,type])=>{
+      // dist (override; placeholder shows set default)
+      const tdD=document.createElement("td");
+      const inpD=document.createElement("input");inpD.type="number";inpD.placeholder=set.setDist||"m";inpD.value=rep.dist||"";inpD.style.minWidth="48px";inpD.style.color="#38bdf8";
+      inpD.oninput=e=>{formSets[si].reps[ri].dist=e.target.value;updatePaceCell(si,ri);};
+      tdD.appendChild(inpD);tr.appendChild(tdD);
+      // time
+      const tdT=document.createElement("td");
+      const inpT=document.createElement("input");inpT.type="text";inpT.placeholder="1:08";inpT.value=rep.time||"";inpT.style.minWidth="52px";
+      inpT.oninput=e=>{formSets[si].reps[ri].time=e.target.value;updatePaceCell(si,ri);};
+      tdT.appendChild(inpT);tr.appendChild(tdT);
+      // pace auto
+      const tdP=document.createElement("td");
+      const pSpan=document.createElement("span");pSpan.id="pace-"+si+"-"+ri;pSpan.style.color="#38bdf8";pSpan.style.fontSize="10px";
+      const ed=rep.dist||set.setDist;const pc=repPace(ed,t2s(rep.time));pSpan.textContent=pc?n2p(pc):"—";
+      tdP.appendChild(pSpan);tr.appendChild(tdP);
+      // other fields
+      [["hrPeak","182","number"],["hrAvg","175","number"],["hrRest","120","number"],["rest","90","number"],["lactate","4.2","number"],["note","","text"]].forEach(([key,ph,type])=>{
         const td=document.createElement("td");
         const inp2=document.createElement("input");inp2.type=type;inp2.placeholder=ph;inp2.value=rep[key]||"";
         if(key==="lactate")inp2.step="0.1";
-        inp2.style.minWidth=key==="note"?"90px":"44px";
+        inp2.style.minWidth=key==="note"?"80px":"46px";
         inp2.oninput=e=>{formSets[si].reps[ri][key]=e.target.value;};
         td.appendChild(inp2);tr.appendChild(td);
       });
@@ -304,21 +338,28 @@ function renderSets(){
     });
     tbl.appendChild(tbody);wrap.appendChild(tbl);box.appendChild(wrap);
     // summary
-    const pcs=set.reps.map(r=>p2n(r.pace)).filter(Boolean);
+    const times=set.reps.map(r=>t2s(r.time)).filter(Boolean);
+    const paces=set.reps.map(r=>repPace(r.dist||set.setDist,t2s(r.time))).filter(Boolean);
     const hrs=set.reps.map(r=>parseInt(r.hrAvg)).filter(Boolean);
     const rsts=set.reps.map(r=>parseInt(r.hrRest)).filter(Boolean);
-    if(pcs.length){
+    if(times.length){
       const sum=document.createElement("div");sum.className="set-summary";
-      sum.innerHTML=`avg <span style="color:#38bdf8">${n2p(pcs.reduce((a,b)=>a+b,0)/pcs.length)}</span>`+
+      sum.innerHTML=`本数 <span style="color:#e2e8f0">${times.length}</span>`+
+        (paces.length?` &nbsp; avgペース <span style="color:#38bdf8">${n2p(paces.reduce((a,b)=>a+b,0)/paces.length)}/km</span>`:"")+
         (hrs.length?` &nbsp; avgHR <span style="color:#fb923c">${Math.round(hrs.reduce((a,b)=>a+b,0)/hrs.length)}</span>`:"")+
-        (rsts.length?` &nbsp; minRest <span style="color:#4ade80">${Math.min(...rsts)}</span>`:"");
+        (rsts.length?` &nbsp; minRestHR <span style="color:#4ade80">${Math.min(...rsts)}</span>`:"");
       box.appendChild(sum);
     }
     c.appendChild(box);
   });
 }
 
-function addSet(){formSets.push({setLabel:"",reps:[{pace:"",hrPeak:"",hrAvg:"",hrRest:"",lactate:"",note:""}]});renderSets();}
+function updatePaceCell(si,ri){
+  const set=formSets[si];const span=document.getElementById("pace-"+si+"-"+ri);
+  if(span){const ed=set.reps[ri].dist||set.setDist;const pc=repPace(ed,t2s(set.reps[ri].time));span.textContent=pc?n2p(pc):"—";}
+}
+
+function addSet(){formSets.push({setLabel:"",setDist:"",restType:"jog",reps:[{time:"",dist:"",hrPeak:"",hrAvg:"",hrRest:"",rest:"",lactate:"",note:""}]});renderSets();}
 
 // ── LACTATE ──
 function renderLa(){
@@ -341,7 +382,7 @@ function addLa(){formLa.push({timing:"",value:""});renderLa();}
 
 function initForm(){
   editId=null;formCondition=3;
-  formSets=[{setLabel:"",reps:[{pace:"",hrPeak:"",hrAvg:"",hrRest:"",lactate:"",note:""}]}];
+  formSets=[{setLabel:"",setDist:"",restType:"jog",reps:[{time:"",dist:"",hrPeak:"",hrAvg:"",hrRest:"",rest:"",lactate:"",note:""}]}];
   formLa=[{timing:"",value:""}];
   document.getElementById("form-title").textContent="// 新規セッション";
   document.getElementById("submit-btn").textContent="記録する";
@@ -349,7 +390,8 @@ function initForm(){
   document.getElementById("f-type").value="インターバル";
   document.getElementById("f-zone").value="Z3";
   document.getElementById("f-dist").value="";
-  document.getElementById("f-dur").value="";
+  document.getElementById("f-dur-m").value="";
+  document.getElementById("f-dur-s").value="";
   document.getElementById("f-hr").value="";
   document.getElementById("f-note").value="";
   document.getElementById("pace-preview").style.display="none";
@@ -359,7 +401,7 @@ function initForm(){
 
 function loadForm(s){
   editId=s.id;formCondition=s.condition||3;
-  formSets=JSON.parse(JSON.stringify(s.intervalSets?.length?s.intervalSets:[{setLabel:"",reps:[{pace:"",hrPeak:"",hrAvg:"",hrRest:"",lactate:"",note:""}]}]));
+  formSets=JSON.parse(JSON.stringify(s.intervalSets?.length?s.intervalSets:[{setLabel:"",setDist:"",restType:"jog",reps:[{time:"",dist:"",hrPeak:"",hrAvg:"",hrRest:"",rest:"",lactate:"",note:""}]}]));
   formLa=JSON.parse(JSON.stringify(s.lactateMeasurements?.length?s.lactateMeasurements:[{timing:"",value:""}]));
   document.getElementById("form-title").textContent="// セッション編集";
   document.getElementById("submit-btn").textContent="更新する";
@@ -367,7 +409,10 @@ function loadForm(s){
   document.getElementById("f-type").value=s.type;
   document.getElementById("f-zone").value=s.zone;
   document.getElementById("f-dist").value=s.distance||"";
-  document.getElementById("f-dur").value=s.duration||"";
+  const durM=Math.floor(s.duration||0);
+  const durS=Math.round(((s.duration||0)-durM)*60);
+  document.getElementById("f-dur-m").value=durM||"";
+  document.getElementById("f-dur-s").value=durS||"";
   document.getElementById("f-hr").value=s.hrAvgSession||"";
   document.getElementById("f-note").value=s.note||"";
   document.getElementById("cond-label").textContent="コンディション — "+COND[formCondition-1];
@@ -383,15 +428,15 @@ function submitForm(){
     id:editId||Date.now(),date,
     type:document.getElementById("f-type").value,
     distance:dist,
-    duration:parseFloat(document.getElementById("f-dur").value)||0,
+    duration:(parseFloat(document.getElementById("f-dur-m").value)||0)+(parseFloat(document.getElementById("f-dur-s").value)||0)/60,
     hrAvgSession:parseInt(document.getElementById("f-hr").value)||null,
     condition:formCondition,
     zone:document.getElementById("f-zone").value,
     note:document.getElementById("f-note").value,
     lactateMeasurements:formLa.filter(m=>m.value!=="").map(m=>({...m,value:parseFloat(m.value)})),
-    intervalSets:formSets.map(set=>({...set,reps:set.reps.map(r=>({
-      ...r,hrPeak:r.hrPeak?parseInt(r.hrPeak):null,hrAvg:r.hrAvg?parseInt(r.hrAvg):null,
-      hrRest:r.hrRest?parseInt(r.hrRest):null,lactate:r.lactate?parseFloat(r.lactate):null,
+    intervalSets:formSets.map(set=>({setLabel:set.setLabel,setDist:set.setDist?parseFloat(set.setDist):null,restType:set.restType||"jog",reps:set.reps.map(r=>({
+      time:r.time||"",dist:r.dist?parseFloat(r.dist):null,hrPeak:r.hrPeak?parseInt(r.hrPeak):null,hrAvg:r.hrAvg?parseInt(r.hrAvg):null,
+      hrRest:r.hrRest?parseInt(r.hrRest):null,rest:r.rest?parseInt(r.rest):null,lactate:r.lactate?parseFloat(r.lactate):null,note:r.note||"",
     }))}))
   };
   if(editId)sessions=sessions.map(s=>s.id===editId?entry:s);
@@ -404,9 +449,9 @@ function submitForm(){
 function renderList(){
   const c=document.getElementById("session-list");c.innerHTML="";
   sessions.forEach(s=>{
+    const rPacesArr=[];(s.intervalSets||[]).forEach(set=>set.reps.forEach(r=>{const pc=repPace(r.dist||set.setDist,t2s(r.time));if(pc)rPacesArr.push(pc);}));
+    const avgRP=rPacesArr.length?rPacesArr.reduce((a,b)=>a+b,0)/rPacesArr.length:null;
     const allReps=s.intervalSets?.flatMap(x=>x.reps)||[];
-    const rPaces=allReps.map(r=>p2n(r.pace)).filter(Boolean);
-    const avgRP=rPaces.length?rPaces.reduce((a,b)=>a+b,0)/rPaces.length:null;
     const minRest=allReps.map(r=>r.hrRest).filter(Boolean);
     const laVals=s.lactateMeasurements?.filter(m=>m.value).map(m=>m.value)||[];
     const maxLa=laVals.length?Math.max(...laVals):null;
@@ -445,18 +490,25 @@ function renderList(){
         if(!set.reps?.length)return;
         const sl=document.createElement("div");sl.className="detail-set-label";sl.textContent=set.setLabel||"セット";det.appendChild(sl);
         const wrap=document.createElement("div");wrap.style.overflowX="auto";
+        const restLabel=set.restType==="その場"?"その場":"jog";
         const tbl=document.createElement("table");tbl.className="detail-table";
-        tbl.innerHTML='<thead><tr><th>#</th><th>ペース</th><th>HR最</th><th>HR均</th><th>レスト</th><th>乳酸</th><th>メモ</th></tr></thead>';
+        tbl.innerHTML='<thead><tr><th>#</th><th>距離</th><th>タイム</th><th>ペース</th><th>HR最</th><th>HR均</th><th>レスト後</th><th>つなぎ('+restLabel+')</th><th>乳酸</th><th>メモ</th></tr></thead>';
         const tb=document.createElement("tbody");
         set.reps.forEach((r,ri)=>{
-          const pp=ri>0?p2n(set.reps[ri-1].pace):null,tp=p2n(r.pace),faster=pp&&tp&&tp<pp;
+          const ed=r.dist||set.setDist;
+          const pc=repPace(ed,t2s(r.time));
+          const ppPrev=ri>0?repPace(set.reps[ri-1].dist||set.setDist,t2s(set.reps[ri-1].time)):null;
+          const faster=ppPrev&&pc&&pc<ppPrev;
           const tr=document.createElement("tr");
           tr.innerHTML=`
             <td style="color:#475569">${ri+1}</td>
-            <td style="font-weight:600;color:${faster?"#4ade80":"#e2e8f0"}">${r.pace||"—"}${faster?" ↑":""}</td>
+            <td style="color:#38bdf8">${ed?ed+"m":"—"}</td>
+            <td style="font-weight:600;color:${faster?"#4ade80":"#e2e8f0"}">${r.time||"—"}${faster?" ↑":""}</td>
+            <td style="color:#38bdf8">${pc?n2p(pc):"—"}</td>
             <td style="color:#f87171">${r.hrPeak||"—"}</td>
             <td style="color:#fb923c">${r.hrAvg||"—"}</td>
             <td style="color:#4ade80">${r.hrRest||"—"}</td>
+            <td style="color:#64748b">${r.rest?r.rest+"s":"—"}</td>
             <td style="color:${r.lactate>4?"#f87171":r.lactate>1.5?"#facc15":"#a78bfa"}">${r.lactate||"—"}</td>
             <td style="color:#64748b;font-style:italic">${r.note||""}</td>
           `;
@@ -464,15 +516,15 @@ function renderList(){
         });
         tbl.appendChild(tb);wrap.appendChild(tbl);det.appendChild(wrap);
         // set summary
-        const pcs=set.reps.map(r=>p2n(r.pace)).filter(Boolean);
+        const pcs=set.reps.map(r=>repPace(r.dist||set.setDist,t2s(r.time))).filter(Boolean);
         const has=set.reps.map(r=>parseInt(r.hrAvg)).filter(Boolean);
         const rsts=set.reps.map(r=>parseInt(r.hrRest)).filter(Boolean);
         if(pcs.length){
           const sm=document.createElement("div");sm.style="font-size:10px;color:#475569;margin-top:5px;display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px";
-          sm.innerHTML=`avg <span style="color:#38bdf8">${n2p(pcs.reduce((a,b)=>a+b,0)/pcs.length)}</span>`+
+          sm.innerHTML=`avgペース <span style="color:#38bdf8">${n2p(pcs.reduce((a,b)=>a+b,0)/pcs.length)}</span>`+
             ` &nbsp; best <span style="color:#4ade80">${n2p(Math.min(...pcs))}</span>`+
             (has.length?` &nbsp; avgHR <span style="color:#fb923c">${Math.round(has.reduce((a,b)=>a+b,0)/has.length)}</span>`:"")+
-            (rsts.length?` &nbsp; minRest <span style="color:#4ade80">${Math.min(...rsts)}</span>`:"");
+            (rsts.length?` &nbsp; minRestHR <span style="color:#4ade80">${Math.min(...rsts)}</span>`:"");
           det.appendChild(sm);
         }
       });
