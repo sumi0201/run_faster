@@ -169,6 +169,10 @@ input,select,textarea,button{font-family:'Courier New',monospace;-webkit-appeara
   <div id="la-container"></div>
   <button class="btn-add-la" onclick="addLa()">＋測定追加</button>
 
+  <div class="field"><label id="rpe-label">RPE 主観的強度 — 未入力</label>
+    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap" id="rpe-btns"></div>
+  </div>
+
   <div class="field"><label>メモ</label><textarea id="f-note" rows="2" placeholder="今日の感覚…"></textarea></div>
 
   <div style="display:flex;gap:8px;margin-top:14px">
@@ -206,6 +210,8 @@ let sessions=[];
 let editId=null;
 let expandedId=null;
 let formCondition=3;
+let formRpe=null;
+const RPE_DESC=["","非常に楽","楽","ややきつくない","ややきつい","きつい","かなりきつい","とてもきつい","非常にきつい","限界手前","オールアウト"];
 let formSets=[];
 let formLa=[];
 
@@ -223,7 +229,7 @@ function zc(z){return ZONES[z]||"#94a3b8";}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(sessions));}catch(e){}}
 function load(){try{const s=localStorage.getItem(KEY);if(s)sessions=JSON.parse(s);}catch(e){}
   if(!sessions.length)sessions=[
-    {id:1,date:"2026-05-28",type:"インターバル",distance:16,duration:68,hrAvgSession:170,condition:5,zone:"Z4",note:"過去最高の感覚",
+    {id:1,date:"2026-05-28",type:"インターバル",distance:16,duration:68,hrAvgSession:170,condition:5,rpe:8,zone:"Z4",note:"過去最高の感覚",
      intervalSets:[{setLabel:"インターバル",setDist:1000,restType:"jog",reps:[
        {time:"3:03",dist:"",hrPeak:176,hrAvg:170,hrRest:124,rest:"90",lactate:3.8,note:""},
        {time:"3:02",dist:"",hrPeak:178,hrAvg:172,hrRest:120,rest:"90",lactate:4.1,note:""},
@@ -231,8 +237,8 @@ function load(){try{const s=localStorage.getItem(KEY);if(s)sessions=JSON.parse(s
        {time:"2:58",dist:"",hrPeak:186,hrAvg:180,hrRest:112,rest:"90",lactate:4.8,note:"ラスト全力"},
      ]}],
      lactateMeasurements:[{timing:"WU後",value:1.0},{timing:"5本目後",value:4.2},{timing:"終了後",value:4.8}]},
-    {id:2,date:"2026-05-27",type:"回復ジョグ",distance:10,duration:58,hrAvgSession:132,condition:3,zone:"Z1",note:"朝。筋肉痛あり",intervalSets:[],lactateMeasurements:[]},
-    {id:3,date:"2026-05-25",type:"閾値",distance:16,duration:70,hrAvgSession:158,condition:4,zone:"Z3",note:"安定して走れた",
+    {id:2,date:"2026-05-27",type:"回復ジョグ",distance:10,duration:58,hrAvgSession:132,condition:3,rpe:3,zone:"Z1",note:"朝。筋肉痛あり",intervalSets:[],lactateMeasurements:[]},
+    {id:3,date:"2026-05-25",type:"閾値",distance:16,duration:70,hrAvgSession:158,condition:4,rpe:6,zone:"Z3",note:"安定して走れた",
      intervalSets:[{setLabel:"変化走",setDist:"",restType:"jog",reps:[
        {time:"3:18",dist:1000,hrPeak:162,hrAvg:158,hrRest:130,rest:"60",lactate:3.5,note:""},
        {time:"6:36",dist:2000,hrPeak:163,hrAvg:159,hrRest:128,rest:"60",lactate:3.8,note:""},
@@ -262,6 +268,20 @@ function initCondBtns(){
     b.style.background=formCondition>=n?"#38bdf8":"#1e293b";
     b.style.color=formCondition>=n?"#000":"#475569";
     b.onclick=()=>{formCondition=n;initCondBtns();document.getElementById("cond-label").textContent="コンディション — "+COND[n-1];};
+    c.appendChild(b);
+  }
+}
+
+function rpeColor(n){if(n<=3)return"#4ade80";if(n<=5)return"#a3e635";if(n<=7)return"#facc15";if(n<=9)return"#fb923c";return"#f87171";}
+
+function initRpeBtns(){
+  const c=document.getElementById("rpe-btns");c.innerHTML="";
+  for(let n=1;n<=10;n++){
+    const b=document.createElement("button");
+    b.textContent=n;
+    b.style="width:28px;height:28px;border-radius:4px;border:none;cursor:pointer;font-size:12px;font-family:'Courier New',monospace;"+
+      (formRpe===n?("background:"+rpeColor(n)+";color:#000;font-weight:700"):"background:#1e293b;color:#475569");
+    b.onclick=()=>{formRpe=n;initRpeBtns();document.getElementById("rpe-label").textContent="RPE 主観的強度 — "+n+" ("+RPE_DESC[n]+")";};
     c.appendChild(b);
   }
 }
@@ -381,7 +401,7 @@ function getBadgeColor(v){const n=parseFloat(v);if(!v||isNaN(n))return"#475569";
 function addLa(){formLa.push({timing:"",value:""});renderLa();}
 
 function initForm(){
-  editId=null;formCondition=3;
+  editId=null;formCondition=3;formRpe=null;
   formSets=[{setLabel:"",setDist:"",restType:"jog",reps:[{time:"",dist:"",hrPeak:"",hrAvg:"",hrRest:"",rest:"",lactate:"",note:""}]}];
   formLa=[{timing:"",value:""}];
   document.getElementById("form-title").textContent="// 新規セッション";
@@ -396,11 +416,12 @@ function initForm(){
   document.getElementById("f-note").value="";
   document.getElementById("pace-preview").style.display="none";
   document.getElementById("cond-label").textContent="コンディション — 普通";
-  updateZoneColor();initCondBtns();renderSets();renderLa();
+  document.getElementById("rpe-label").textContent="RPE 主観的強度 — 未入力";
+  updateZoneColor();initCondBtns();initRpeBtns();renderSets();renderLa();
 }
 
 function loadForm(s){
-  editId=s.id;formCondition=s.condition||3;
+  editId=s.id;formCondition=s.condition||3;formRpe=s.rpe||null;
   formSets=JSON.parse(JSON.stringify(s.intervalSets?.length?s.intervalSets:[{setLabel:"",setDist:"",restType:"jog",reps:[{time:"",dist:"",hrPeak:"",hrAvg:"",hrRest:"",rest:"",lactate:"",note:""}]}]));
   formLa=JSON.parse(JSON.stringify(s.lactateMeasurements?.length?s.lactateMeasurements:[{timing:"",value:""}]));
   document.getElementById("form-title").textContent="// セッション編集";
@@ -416,7 +437,8 @@ function loadForm(s){
   document.getElementById("f-hr").value=s.hrAvgSession||"";
   document.getElementById("f-note").value=s.note||"";
   document.getElementById("cond-label").textContent="コンディション — "+COND[formCondition-1];
-  updateZoneColor();updatePacePreview();initCondBtns();renderSets();renderLa();
+  document.getElementById("rpe-label").textContent=formRpe?("RPE 主観的強度 — "+formRpe+" ("+RPE_DESC[formRpe]+")"):"RPE 主観的強度 — 未入力";
+  updateZoneColor();updatePacePreview();initCondBtns();initRpeBtns();renderSets();renderLa();
   showView("add");
 }
 
@@ -431,6 +453,7 @@ function submitForm(){
     duration:(parseFloat(document.getElementById("f-dur-m").value)||0)+(parseFloat(document.getElementById("f-dur-s").value)||0)/60,
     hrAvgSession:parseInt(document.getElementById("f-hr").value)||null,
     condition:formCondition,
+    rpe:formRpe,
     zone:document.getElementById("f-zone").value,
     note:document.getElementById("f-note").value,
     lactateMeasurements:formLa.filter(m=>m.value!=="").map(m=>({...m,value:parseFloat(m.value)})),
@@ -473,6 +496,7 @@ function renderList(){
           ${s.hrAvgSession?`<span style="color:#fb923c;font-weight:400">♥${s.hrAvgSession}</span>`:""}
           ${minRest.length?`<span style="color:#4ade80;font-weight:400">↓${Math.min(...minRest)}</span>`:""}
           ${maxLa?`<span style="color:${maxLa>4?"#f87171":maxLa>1.5?"#facc15":"#a78bfa"};font-weight:400">La${maxLa}</span>`:""}
+          ${s.rpe?`<span style="color:${rpeColor(s.rpe)};font-weight:400">RPE${s.rpe}</span>`:""}
         </div>
         ${s.note?`<div class="session-note">${s.note}</div>`:""}
       </div>
