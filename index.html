@@ -270,6 +270,8 @@ function monthRange(off){
   return {start,end,label};
 }
 function inRange(ds,r){const d=new Date(ds);return d>=r.start&&d<=r.end;}
+// total distance incl warmup + cooldown
+function totalDist(s){return (s.distance||0)+(s.warmup||0)+(s.cooldown||0);}
 function zc(z){return ZONES[z]||"#94a3b8";}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(sessions));}catch(e){}}
 function load(){try{const s=localStorage.getItem(KEY);if(s)sessions=JSON.parse(s);}catch(e){}
@@ -539,7 +541,7 @@ function renderList(){
   if(listPeriod==="week"||listPeriod==="month"){
     const r=(listPeriod==="week")?weekRange(periodOffset):monthRange(periodOffset);
     list=sessions.filter(s=>inRange(s.date,r));
-    const tot=list.reduce((a,b)=>a+(b.distance||0),0);
+    const tot=list.reduce((a,b)=>a+totalDist(b),0);
     document.getElementById("period-nav-label").textContent=r.label;
     document.getElementById("period-nav-total").textContent=tot+"km ・ "+list.length+"本";
     // disable next arrow at offset 0
@@ -552,7 +554,7 @@ function renderList(){
       const m=mk(s.date);
       if(m!==curMonth){
         curMonth=m;
-        const monthTotal=sessions.filter(x=>mk(x.date)===m).reduce((a,b)=>a+(b.distance||0),0);
+        const monthTotal=sessions.filter(x=>mk(x.date)===m).reduce((a,b)=>a+totalDist(b),0);
         const mh=document.createElement("div");mh.className="month-header";
         mh.innerHTML=m+`<span class="month-total">${monthTotal}km</span>`;
         c.appendChild(mh);
@@ -583,7 +585,7 @@ function renderCard(s){
       <div class="session-type" style="color:${zc(s.zone)};border-color:${zc(s.zone)}44">${s.type}</div>
       <div>
         <div class="session-data">
-          <span>${s.distance}km</span>
+          <span>${totalDist(s)}km${(s.warmup||s.cooldown)?`<span style="color:#475569;font-weight:400;font-size:10px"> (本${s.distance})</span>`:""}</span>
           <span style="color:#475569;font-weight:400">${fp(s.distance,s.duration)}</span>
           ${avgRP?`<span style="color:#38bdf8">rep ${n2p(avgRP)}</span>`:""}
           ${s.hrAvgSession?`<span style="color:#fb923c;font-weight:400">♥${s.hrAvgSession}</span>`:""}
@@ -683,8 +685,8 @@ function renderCard(s){
 
 // ── STATS ──
 function updateStats(){
-  const total=sessions.reduce((a,b)=>a+(b.distance||0),0);
-  const tw=sessions.filter(s=>(Date.now()-new Date(s.date))/864e5<=7).reduce((a,b)=>a+(b.distance||0),0);
+  const total=sessions.reduce((a,b)=>a+totalDist(b),0);
+  const tw=sessions.filter(s=>(Date.now()-new Date(s.date))/864e5<=7).reduce((a,b)=>a+totalDist(b),0);
   document.getElementById("stat-week").textContent=tw+"km";
   document.getElementById("stat-total").textContent=total+"km";
   document.getElementById("stat-count").textContent=sessions.length+"本";
@@ -712,7 +714,7 @@ function renderStats(){
 
   // weekly bar chart
   const weeks={};
-  sessions.forEach(s=>{const k=wk(s.date);if(!weeks[k])weeks[k]=0;weeks[k]+=s.distance||0;});
+  sessions.forEach(s=>{const k=wk(s.date);if(!weeks[k])weeks[k]=0;weeks[k]+=totalDist(s);});
   const wArr=Object.entries(weeks).slice(-6);
   const maxW=Math.max(...wArr.map(x=>x[1]),1);
   const wc=document.getElementById("weekly-chart");wc.innerHTML="";
@@ -722,7 +724,7 @@ function renderStats(){
 
   // monthly bar chart
   const months={};
-  [...sessions].reverse().forEach(s=>{const k=mk(s.date);if(!months[k])months[k]=0;months[k]+=s.distance||0;});
+  [...sessions].reverse().forEach(s=>{const k=mk(s.date);if(!months[k])months[k]=0;months[k]+=totalDist(s);});
   const mArr=Object.entries(months).slice(-6);
   const maxM=Math.max(...mArr.map(x=>x[1]),1);
   const mc=document.getElementById("monthly-chart");mc.innerHTML="";
